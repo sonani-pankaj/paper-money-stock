@@ -41,6 +41,9 @@ paperstock:
   market-data:
     base-url: ${MARKET_DATA_BASE_URL:https://api.exchangerate.host}
     poll-ms: 30000
+  strategy:
+    enabled: true
+    eval-ms: 30000
 
 resilience4j:
   retry:
