@@ -213,6 +213,7 @@ Note:
 ## Documentation
 - Technical details: docs/technical-details.md
 - Application usage: docs/application-overview.md
+- Live Broker Setup (Robinhood / Alpaca): docs/live-broker-setup-robinhood.md
 
 ## Suggested Roadmap
 - add authentication and role-based access
