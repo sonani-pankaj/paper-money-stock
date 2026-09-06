@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: paperstock-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: paperstock
+      POSTGRES_USER: paperstock
+      POSTGRES_PASSWORD: paperstock
+    volumes:
+      - paperstock_pgdata:/var/lib/postgresql/data
+
+volumes:
+  paperstock_pgdata:

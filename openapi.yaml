@@ -1,0 +1,168 @@
+openapi: 3.0.3
+info:
+  title: PaperStock Unified Trading Platform
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/trade/orders:
+    post:
+      summary: Place a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequestDto'
+      responses:
+        '200':
+          description: Order response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+  /api/trade/orders/{id}:
+    get:
+      summary: Get order by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDto'
+    delete:
+      summary: Cancel order by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cancelled
+  /api/trade/positions:
+    get:
+      summary: List positions
+      responses:
+        '200':
+          description: Position list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PositionDto'
+  /api/account:
+    get:
+      summary: Get account summary
+      responses:
+        '200':
+          description: Account data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDto'
+  /api/market/latest:
+    get:
+      summary: Get latest market snapshot
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest market price
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketSnapshotDto'
+components:
+  schemas:
+    PlaceOrderRequestDto:
+      type: object
+      required: [symbol, qty, side, type]
+      properties:
+        symbol:
+          type: string
+        qty:
+          type: number
+        side:
+          type: string
+          enum: [buy, sell]
+        type:
+          type: string
+          enum: [market, limit]
+        limitPrice:
+          type: number
+    OrderDto:
+      type: object
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        qty:
+          type: number
+        filledQty:
+          type: number
+        averageFillPrice:
+          type: number
+    TradeDto:
+      type: object
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        symbol:
+          type: string
+        qty:
+          type: number
+        price:
+          type: number
+        fee:
+          type: number
+    PositionDto:
+      type: object
+      properties:
+        symbol:
+          type: string
+        qty:
+          type: number
+        averagePrice:
+          type: number
+    AccountDto:
+      type: object
+      properties:
+        mode:
+          type: string
+        cash:
+          type: number
+        equity:
+          type: number
+    MarketSnapshotDto:
+      type: object
+      properties:
+        symbol:
+          type: string
+        price:
+          type: number
+        capturedAt:
+          type: string
+          format: date-time
