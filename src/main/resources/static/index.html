@@ -24,7 +24,10 @@
 
 <main class="shell grid">
     <section class="panel col-2">
-        <h2>Account Snapshot</h2>
+        <div class="panel-header">
+            <h2>Account Snapshot</h2>
+            <button type="button" class="help-btn" data-help="account" title="Card Info">?</button>
+        </div>
         <div class="metric-row">
             <div class="metric">
                 <span>Mode</span>
@@ -43,8 +46,11 @@
         <p class="hint">P&L values in holdings are derived from latest market snapshots.</p>
     </section>
 
-    <section class="panel">
-        <h2>Stock Search and Add Holdings</h2>
+    <section class="panel col-2">
+        <div class="panel-header">
+            <h2>Stock Search and Add Holdings</h2>
+            <button type="button" class="help-btn" data-help="search" title="Card Info">?</button>
+        </div>
         <form id="stockSearchForm" class="search-layout">
             <label>Search Stock
                 <div class="search-row">
@@ -57,7 +63,7 @@
         <div class="search-results standalone">
             <div class="search-results-head">
                 <strong>Results</strong>
-                <span class="hint hint-inline">Fill Strategy copies symbol to strategy config.</span>
+                <span class="hint hint-inline">Fill Strategy opens strategy config modal.</span>
             </div>
             <div class="table-wrap">
                 <table>
@@ -76,59 +82,58 @@
         </div>
     </section>
 
-    <section class="panel">
-        <h2>Strategy Config</h2>
-        <form id="strategyForm" class="form-grid">
-            <input type="hidden" id="strategyId" />
-
-            <label>Symbol
-                <input id="symbol" required placeholder="AAPL" maxlength="10" />
-            </label>
-
-            <label>Buy on Drop %
-                <input id="buyDropPercent" type="number" step="0.01" min="0.01" max="100" value="5" required />
-            </label>
-
-            <label>Sell on Rise %
-                <input id="sellRisePercent" type="number" step="0.01" min="0.01" max="100" value="10" required />
-            </label>
-
-            <label>Buy Cash %
-                <input id="buyCashPercent" type="number" step="0.01" min="0.01" max="100" value="10" required />
-            </label>
-
-            <label>Sell Position %
-                <input id="sellPositionPercent" type="number" step="0.01" min="0.01" max="100" value="25" required />
-            </label>
-
-            <label>Max Orders/Day
-                <input id="maxOrdersPerDay" type="number" min="1" value="2" required />
-            </label>
-
-            <label>Cooldown Minutes
-                <input id="cooldownMinutes" type="number" min="0" value="30" required />
-            </label>
-
-            <label class="check-wrap"><input id="active" type="checkbox" checked /> Active</label>
-            <label class="check-wrap"><input id="simulatorEnabled" type="checkbox" checked /> Simulator</label>
-            <label class="check-wrap"><input id="alpacaEnabled" type="checkbox" checked /> Alpaca</label>
-
-            <div class="form-actions">
-                <button type="submit" class="btn primary">Save Strategy</button>
-                <button type="button" id="clearFormBtn" class="btn">Clear</button>
-            </div>
-        </form>
-    </section>
-
     <section class="panel col-2">
-        <h2>Strategies</h2>
+        <div class="panel-header">
+            <h2>Holdings and P&L</h2>
+            <button type="button" class="help-btn" data-help="holdings" title="Card Info">?</button>
+        </div>
+        <p class="hint">Manage each row: edit values, delete holding, or add symbol to strategy config.</p>
+        <form id="manualHoldingForm" class="holding-form">
+            <label>Symbol
+                <input id="holdingSymbol" placeholder="AAPL" maxlength="12" required />
+            </label>
+            <label>Qty
+                <input id="holdingQty" type="number" min="0.000001" step="0.000001" value="1" required />
+            </label>
+            <label>Buy Price
+                <input id="holdingBuyPrice" type="number" min="0.000001" step="0.000001" placeholder="180.25" required />
+            </label>
+            <button type="submit" class="btn">Add/Update Holding</button>
+        </form>
+        <label class="inline-field">Search Holdings
+            <input id="holdingsFilter" placeholder="Filter by symbol, qty, or P&L" />
+        </label>
         <div class="table-wrap">
             <table>
                 <thead>
                 <tr>
                     <th>Symbol</th>
-                    <th>Buy%</th>
-                    <th>Sell%</th>
+                    <th>Qty</th>
+                    <th>Buy Price</th>
+                    <th>Current Live Price</th>
+                    <th>Unrealized P&L</th>
+                    <th>Action</th>
+                </tr>
+                </thead>
+                <tbody id="holdingsBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel col-2">
+        <div class="panel-header">
+            <h2>Strategies</h2>
+            <button type="button" class="help-btn" data-help="strategies" title="Card Info">?</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Live Price</th>
+                    <th>Ref Price</th>
+                    <th>Buy Target (Drop%)</th>
+                    <th>Sell Target (Rise%)</th>
                     <th>Status</th>
                     <th>Modes</th>
                     <th>Action</th>
@@ -140,7 +145,10 @@
     </section>
 
     <section class="panel col-2">
-        <h2>Strategy Buy/Sell Report</h2>
+        <div class="panel-header">
+            <h2>Strategy Buy/Sell Report</h2>
+            <button type="button" class="help-btn" data-help="report" title="Card Info">?</button>
+        </div>
         <p class="hint">Totals from successful strategy executions, grouped by stock symbol.</p>
         <div class="table-wrap">
             <table>
@@ -161,7 +169,10 @@
     </section>
 
     <section class="panel col-2">
-        <h2>AI Insights and Backtest</h2>
+        <div class="panel-header">
+            <h2>AI Insights and Backtest</h2>
+            <button type="button" class="help-btn" data-help="ai" title="Card Info">?</button>
+        </div>
         <div class="ai-grid">
             <div>
                 <h3>Current Sentiment by Strategy Symbol</h3>
@@ -225,42 +236,10 @@
     </section>
 
     <section class="panel col-2">
-        <h2>Holdings and P&L</h2>
-        <p class="hint">Manage each row: edit values, delete holding, or add symbol to strategy config.</p>
-        <form id="manualHoldingForm" class="holding-form">
-            <label>Symbol
-                <input id="holdingSymbol" placeholder="AAPL" maxlength="12" required />
-            </label>
-            <label>Qty
-                <input id="holdingQty" type="number" min="0.000001" step="0.000001" value="1" required />
-            </label>
-            <label>Buy Price
-                <input id="holdingBuyPrice" type="number" min="0.000001" step="0.000001" placeholder="180.25" required />
-            </label>
-            <button type="submit" class="btn">Add/Update Holding</button>
-        </form>
-        <label class="inline-field">Search Holdings
-            <input id="holdingsFilter" placeholder="Filter by symbol, qty, or P&L" />
-        </label>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Qty</th>
-                    <th>Buy Price</th>
-                    <th>Current Live Price</th>
-                    <th>Unrealized P&L</th>
-                    <th>Action</th>
-                </tr>
-                </thead>
-                <tbody id="holdingsBody"></tbody>
-            </table>
+        <div class="panel-header">
+            <h2>Price vs Trigger Lines</h2>
+            <button type="button" class="help-btn" data-help="chart" title="Card Info">?</button>
         </div>
-    </section>
-
-    <section class="panel col-2">
-        <h2>Price vs Trigger Lines</h2>
         <label class="inline-field">Selected Strategy
             <select id="chartStrategySelect"></select>
         </label>
@@ -272,7 +251,10 @@
     </section>
 
     <section class="panel col-2">
-        <h2>Automation Activity</h2>
+        <div class="panel-header">
+            <h2>Automation Activity</h2>
+            <button type="button" class="help-btn" data-help="activity" title="Card Info">?</button>
+        </div>
         <label class="inline-field">Search Activity
             <input id="activityFilter" placeholder="Filter by symbol, status, side, or message" />
         </label>
@@ -293,6 +275,65 @@
         </div>
     </section>
 </main>
+
+<div id="strategyModal" class="modal-backdrop hidden">
+    <div class="modal-content panel">
+        <div class="modal-header">
+            <h3>Configure Strategy Rules</h3>
+            <button type="button" id="closeStrategyModalBtn" class="btn-close">&times;</button>
+        </div>
+        <form id="strategyForm" class="form-grid">
+            <input type="hidden" id="strategyId" />
+
+            <label>Symbol
+                <input id="symbol" required placeholder="AAPL" maxlength="10" />
+            </label>
+
+            <label>Buy on Drop %
+                <input id="buyDropPercent" type="number" step="0.01" min="0.01" max="100" value="5" required />
+            </label>
+
+            <label>Sell on Rise %
+                <input id="sellRisePercent" type="number" step="0.01" min="0.01" max="100" value="10" required />
+            </label>
+
+            <label>Buy Cash %
+                <input id="buyCashPercent" type="number" step="0.01" min="0.01" max="100" value="10" required />
+            </label>
+
+            <label>Sell Position %
+                <input id="sellPositionPercent" type="number" step="0.01" min="0.01" max="100" value="25" required />
+            </label>
+
+            <label>Max Orders/Day
+                <input id="maxOrdersPerDay" type="number" min="1" value="2" required />
+            </label>
+
+            <label>Cooldown Minutes
+                <input id="cooldownMinutes" type="number" min="0" value="30" required />
+            </label>
+
+            <label class="check-wrap"><input id="active" type="checkbox" checked /> Active</label>
+            <label class="check-wrap"><input id="simulatorEnabled" type="checkbox" checked /> Simulator</label>
+            <label class="check-wrap"><input id="alpacaEnabled" type="checkbox" checked /> Alpaca</label>
+
+            <div class="form-actions">
+                <button type="submit" class="btn primary">Save Strategy</button>
+                <button type="button" id="cancelStrategyModalBtn" class="btn">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="helpModal" class="modal-backdrop hidden">
+    <div class="modal-content panel">
+        <div class="modal-header">
+            <h3 id="helpModalTitle">Card Information</h3>
+            <button type="button" id="closeHelpModalBtn" class="btn-close">&times;</button>
+        </div>
+        <div id="helpModalBody" class="help-modal-body"></div>
+    </div>
+</div>
 
 <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 

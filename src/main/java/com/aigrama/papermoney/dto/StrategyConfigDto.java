@@ -18,6 +18,10 @@ public record StrategyConfigDto(
         boolean active,
         boolean simulatorEnabled,
         boolean alpacaEnabled,
-        LocalDateTime lastActionAt
+        LocalDateTime lastActionAt,
+        BigDecimal currentPrice,
+        BigDecimal referencePrice,
+        BigDecimal buyTriggerPrice,
+        BigDecimal sellTriggerPrice
 ) {
 }

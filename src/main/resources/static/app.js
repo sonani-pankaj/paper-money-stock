@@ -114,7 +114,7 @@ async function onStrategyTableClick(event) {
     const action = btn.dataset.action;
     if (action === "edit") {
         fillForm(strategy);
-        $("buyDropPercent").focus();
+        openStrategyModal();
         showToast(`Editing strategy for ${strategy.symbol}`);
         return;
     }
@@ -137,10 +137,25 @@ async function onStrategyTableClick(event) {
             }
             await api(`/api/strategies/${strategy.id}`, { method: "DELETE" });
             clearForm();
+            closeStrategyModal();
             await refreshAll();
         } catch (error) {
             showError(error);
         }
+    }
+}
+
+function openStrategyModal() {
+    const modal = $("strategyModal");
+    if (modal) {
+        modal.classList.remove("hidden");
+    }
+}
+
+function closeStrategyModal() {
+    const modal = $("strategyModal");
+    if (modal) {
+        modal.classList.add("hidden");
     }
 }
 
@@ -162,8 +177,7 @@ function startNewStrategyForSymbol(symbol) {
     clearForm();
     const normalized = String(symbol || "").toUpperCase();
     $("symbol").value = normalized;
-    $("symbol").focus();
-    showToast(`Strategy form ready for ${normalized}`);
+    openStrategyModal();
 }
 
 function openStrategyFromHolding(symbol) {
@@ -171,12 +185,11 @@ function openStrategyFromHolding(symbol) {
     const existing = state.strategies.find((s) => s.symbol === normalized);
     if (existing) {
         fillForm(existing);
-        $("buyDropPercent").focus();
         showToast(`Loaded existing strategy for ${normalized}.`);
     } else {
         startNewStrategyForSymbol(normalized);
     }
-    $("strategyForm").scrollIntoView({ behavior: "smooth", block: "start" });
+    openStrategyModal();
 }
 
 async function onHoldingsTableClick(event) {
@@ -252,6 +265,7 @@ async function saveStrategy(event) {
             await api("/api/strategies", { method: "POST", body: JSON.stringify(payload) });
         }
         clearForm();
+        closeStrategyModal();
         await refreshAll();
     } catch (error) {
         showError(error);
@@ -267,10 +281,17 @@ function renderStrategies() {
     state.strategies.forEach((s) => {
         const tr = document.createElement("tr");
         const statusClass = s.active ? "good" : "warn";
+        const currentPriceText = s.currentPrice == null ? "-" : toMoney(s.currentPrice);
+        const refPriceText = s.referencePrice == null ? "-" : toMoney(s.referencePrice);
+        const buyTargetText = s.buyTriggerPrice == null ? "-" : `${toMoney(s.buyTriggerPrice)} (-${toNum(s.buyDropPercent)}%)`;
+        const sellTargetText = s.sellTriggerPrice == null ? "-" : `${toMoney(s.sellTriggerPrice)} (+${toNum(s.sellRisePercent)}%)`;
+
         tr.innerHTML = `
             <td class="mono">${s.symbol}</td>
-            <td>${toNum(s.buyDropPercent)}%</td>
-            <td>${toNum(s.sellRisePercent)}%</td>
+            <td class="mono">${currentPriceText}</td>
+            <td class="mono">${refPriceText}</td>
+            <td class="mono">${buyTargetText}</td>
+            <td class="mono">${sellTargetText}</td>
             <td><span class="tag ${statusClass}">${s.active ? "active" : "paused"}</span></td>
             <td>${s.simulatorEnabled ? "sim" : ""}${s.alpacaEnabled ? " alpaca" : ""}</td>
             <td>
@@ -790,6 +811,8 @@ bind("holdingsBody", "click", (e) => {
     onHoldingsTableClick(e).catch(showError);
 });
 bind("clearFormBtn", "click", clearForm);
+bind("closeStrategyModalBtn", "click", closeStrategyModal);
+bind("cancelStrategyModalBtn", "click", closeStrategyModal);
 bind("refreshAllBtn", "click", () => onRefreshAllClick().catch(showError));
 bind("chartStrategySelect", "change", (e) => {
     loadChart(e.target.value).catch(showError);
@@ -803,5 +826,149 @@ bind("stockSearchQuery", "keydown", (e) => {
     }
 });
 
+const HELP_DATA = {
+    account: {
+        title: "Account Snapshot Help",
+        body: `
+            <p><strong>Overview:</strong> Displays your account balance, trading mode, and market data status in real time.</p>
+            <h4>Fields Explained:</h4>
+            <ul>
+                <li><code>Mode</code>: Current trading mode (e.g. <em>simulator</em> for local paper trading, or <em>alpaca</em> for broker API).</li>
+                <li><code>Cash</code>: Your uninvested liquid cash available to execute BUY orders.</li>
+                <li><code>Equity</code>: Total portfolio value (Cash + Market value of all held stock positions).</li>
+                <li><code>Quotes Provider</code>: Active market data provider (e.g. <em>finnhub</em>) and maximum quote stale seconds.</li>
+            </ul>
+        `
+    },
+    search: {
+        title: "Stock Search & Add Holdings Help",
+        body: `
+            <p><strong>Overview:</strong> Search for any US stock ticker or company name, view live prices, and easily start a strategy configuration.</p>
+            <h4>Fields & Actions Explained:</h4>
+            <ul>
+                <li><code>Search Stock Input</code>: Enter a symbol (e.g. <em>AAPL</em>, <em>NVDA</em>) or company name and click <strong>Find</strong>.</li>
+                <li><code>Results Table</code>: Shows matching Symbol, Company Name, Exchange, and Live Market Price.</li>
+                <li><code>Fill Strategy</code>: Opens the Strategy Config modal pre-filled with the selected stock symbol.</li>
+            </ul>
+        `
+    },
+    holdings: {
+        title: "Holdings and P&L Help",
+        body: `
+            <p><strong>Overview:</strong> Manage your current portfolio stock holdings, view purchase cost basis, and monitor live unrealized P&L.</p>
+            <h4>Fields & Actions Explained:</h4>
+            <ul>
+                <li><code>Symbol</code>: Stock ticker of the holding.</li>
+                <li><code>Qty</code>: Number of shares owned.</li>
+                <li><code>Buy Price</code>: Your purchase cost basis per share ($). Used as the reference price for strategy rules!</li>
+                <li><code>Current Live Price</code>: Latest real-time stock price fetched from the market data provider.</li>
+                <li><code>Unrealized P&L</code>: Profit or loss on the position (<code>(Live Price - Buy Price) × Qty</code>).</li>
+                <li><code>Add/Update Holding Form</code>: Manually add new positions or adjust share qty & cost basis.</li>
+                <li><code>Add to Strategy</code>: Opens Strategy Config modal to set auto-buy and auto-sell rules for this holding.</li>
+            </ul>
+        `
+    },
+    strategies: {
+        title: "Active Strategies Help",
+        body: `
+            <p><strong>Overview:</strong> Monitor all active stock trading strategies and their live price trigger thresholds.</p>
+            <h4>Fields & Actions Explained:</h4>
+            <ul>
+                <li><code>Symbol</code>: Stock ticker monitored by the strategy.</li>
+                <li><code>Live Price</code>: Current market price of the stock.</li>
+                <li><code>Ref Price</code>: Reference price used for rule calculation (Cost basis from Holdings, or initial market price).</li>
+                <li><code>Buy Target (Drop%)</code>: Target price that triggers an automated BUY (e.g., 5% drop below Ref Price).</li>
+                <li><code>Sell Target (Rise%)</code>: Target price that triggers an automated SELL (e.g., 10% rise above Ref Price).</li>
+                <li><code>Status</code>: <em>Active</em> (evaluating automatically) or <em>Paused</em>.</li>
+                <li><code>Modes</code>: Enabled execution adapters (e.g. <em>sim</em> for simulator, <em>alpaca</em> for broker).</li>
+                <li><code>Edit / Pause / Delete</code>: Edit strategy parameters, pause/resume execution, or delete the strategy.</li>
+            </ul>
+        `
+    },
+    report: {
+        title: "Strategy Buy/Sell Report Help",
+        body: `
+            <p><strong>Overview:</strong> Displays aggregated execution metrics from all successful automated trades, grouped by stock symbol.</p>
+            <h4>Fields Explained:</h4>
+            <ul>
+                <li><code>Symbol</code>: Stock ticker for the report summary.</li>
+                <li><code>Buy Qty / Buy Amount / Buy Trades</code>: Total shares purchased, total cash spent, and count of BUY executions.</li>
+                <li><code>Sell Qty / Sell Amount / Sell Trades</code>: Total shares sold, total cash received, and count of SELL executions.</li>
+            </ul>
+        `
+    },
+    ai: {
+        title: "AI Insights & One-Click Backtest Help",
+        body: `
+            <p><strong>Overview:</strong> View real-time AI sentiment analysis, dynamic volatility adjustments, and run historical side-by-side strategy simulations.</p>
+            <h4>Sections Explained:</h4>
+            <ul>
+                <li><code>Current Sentiment</code>: Aggregated news & market sentiment score (-1.0 Bearish to +1.0 Bullish).</li>
+                <li><code>Live AI Decision</code>: Displays buy/sell probabilities, volatility-scaled dynamic thresholds, and AI signal gating status.</li>
+                <li><code>One-Click Backtest</code>: Compares <strong>AI-Enabled</strong> vs <strong>Rule-Only</strong> performance on historical price snapshots (Ending Cash, Qty, Value, P&L).</li>
+            </ul>
+        `
+    },
+    chart: {
+        title: "Price vs Trigger Lines Help",
+        body: `
+            <p><strong>Overview:</strong> Interactive line chart visualizing historical price movements alongside active BUY and SELL trigger target lines for any strategy.</p>
+            <h4>Fields Explained:</h4>
+            <ul>
+                <li><code>Selected Strategy</code>: Choose which stock strategy chart to visualize.</li>
+                <li><code>Market Price Line</code>: Real-time price snapshot history.</li>
+                <li><code>Buy Trigger Line</code>: Dynamic or static threshold price required for a BUY.</li>
+                <li><code>Sell Trigger Line</code>: Dynamic or static threshold price required for a SELL.</li>
+                <li><code>Freshness Badge</code>: Indicates if quotes are <em>fresh</em> or <em>stale</em>.</li>
+            </ul>
+        `
+    },
+    activity: {
+        title: "Automation Activity Audit Log Help",
+        body: `
+            <p><strong>Overview:</strong> Real-time audit log of every strategy evaluation cycle, order execution, skipped signal, or error.</p>
+            <h4>Fields Explained:</h4>
+            <ul>
+                <li><code>Time</code>: Timestamp of the evaluation cycle.</li>
+                <li><code>Symbol & Side</code>: Stock ticker and order direction (BUY or SELL).</li>
+                <li><code>Status</code>: <code>success</code> (order placed), <code>skipped</code> (threshold not crossed / AI gated / cooldown), or <code>failed</code>.</li>
+                <li><code>Message & Order</code>: Detailed reason or returned broker Order ID.</li>
+            </ul>
+        `
+    }
+};
+
+function openHelpModal(cardKey) {
+    const helpInfo = HELP_DATA[cardKey];
+    if (!helpInfo) {
+        return;
+    }
+    const titleEl = $("helpModalTitle");
+    const bodyEl = $("helpModalBody");
+    const modalEl = $("helpModal");
+
+    if (titleEl && bodyEl && modalEl) {
+        titleEl.textContent = helpInfo.title;
+        bodyEl.innerHTML = helpInfo.body;
+        modalEl.classList.remove("hidden");
+    }
+}
+
+function closeHelpModal() {
+    const modalEl = $("helpModal");
+    if (modalEl) {
+        modalEl.classList.add("hidden");
+    }
+}
+
+bind("closeHelpModalBtn", "click", closeHelpModal);
+
+document.addEventListener("click", (e) => {
+    const helpBtn = e.target.closest(".help-btn");
+    if (helpBtn && helpBtn.dataset.help) {
+        openHelpModal(helpBtn.dataset.help);
+    }
+});
+
 refreshAll().catch(showError);
-setInterval(() => refreshAll().catch(showError), 30000);
+setInterval(() => refreshAll().catch(showError), 10000);

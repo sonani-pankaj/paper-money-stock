@@ -1,14 +1,18 @@
 package com.aigrama.papermoney.service;
 
+import com.aigrama.papermoney.dto.MarketSnapshotDto;
 import com.aigrama.papermoney.dto.StrategyConfigDto;
 import com.aigrama.papermoney.dto.StrategyConfigRequestDto;
+import com.aigrama.papermoney.entity.PositionEntity;
 import com.aigrama.papermoney.entity.StrategyConfigEntity;
+import com.aigrama.papermoney.repository.PositionRepository;
 import com.aigrama.papermoney.repository.StrategyConfigRepository;
 import com.aigrama.papermoney.repository.StrategyExecutionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -21,13 +25,19 @@ public class StrategyConfigService {
 
     private final StrategyConfigRepository strategyConfigRepository;
     private final StrategyExecutionRepository strategyExecutionRepository;
+    private final PositionRepository positionRepository;
+    private final MarketDataService marketDataService;
 
     public StrategyConfigService(
             StrategyConfigRepository strategyConfigRepository,
-            StrategyExecutionRepository strategyExecutionRepository
+            StrategyExecutionRepository strategyExecutionRepository,
+            PositionRepository positionRepository,
+            MarketDataService marketDataService
     ) {
         this.strategyConfigRepository = strategyConfigRepository;
         this.strategyExecutionRepository = strategyExecutionRepository;
+        this.positionRepository = positionRepository;
+        this.marketDataService = marketDataService;
     }
 
     @Transactional
@@ -118,6 +128,29 @@ public class StrategyConfigService {
     }
 
     private StrategyConfigDto toDto(StrategyConfigEntity entity) {
+        BigDecimal currentPrice = null;
+        try {
+            MarketSnapshotDto snapshot = marketDataService.latestSnapshot(entity.getSymbol()).block();
+            if (snapshot != null) {
+                currentPrice = snapshot.price();
+            }
+        } catch (Exception ignored) {
+        }
+
+        PositionEntity position = positionRepository.findBySymbol(entity.getSymbol()).orElse(null);
+        BigDecimal referencePrice = (position != null && position.getAveragePrice() != null && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0)
+                ? position.getAveragePrice()
+                : currentPrice;
+
+        BigDecimal buyTriggerPrice = null;
+        BigDecimal sellTriggerPrice = null;
+        if (referencePrice != null) {
+            buyTriggerPrice = referencePrice.multiply(BigDecimal.ONE.subtract(entity.getBuyDropPercent().movePointLeft(2)))
+                    .setScale(4, RoundingMode.HALF_UP);
+            sellTriggerPrice = referencePrice.multiply(BigDecimal.ONE.add(entity.getSellRisePercent().movePointLeft(2)))
+                    .setScale(4, RoundingMode.HALF_UP);
+        }
+
         return new StrategyConfigDto(
                 entity.getId().toString(),
                 entity.getSymbol(),
@@ -130,7 +163,11 @@ public class StrategyConfigService {
                 entity.isActive(),
                 entity.isSimulatorEnabled(),
                 entity.isAlpacaEnabled(),
-                entity.getLastActionAt()
+                entity.getLastActionAt(),
+                currentPrice,
+                referencePrice,
+                buyTriggerPrice,
+                sellTriggerPrice
         );
     }
 }

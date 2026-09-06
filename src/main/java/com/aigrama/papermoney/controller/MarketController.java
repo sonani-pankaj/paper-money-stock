@@ -58,4 +58,10 @@ public class MarketController {
     public MarketConfigDto config() {
         return new MarketConfigDto(provider, maxStaleSeconds);
     }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(IllegalStateException.class)
+    public org.springframework.http.ResponseEntity<String> handleIllegalState(IllegalStateException ex) {
+        return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
+                .body(ex.getMessage());
+    }
 }

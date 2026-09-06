@@ -30,18 +30,19 @@ paperstock:
   mode: simulator
   fee-percentage: 0.001
   available-liquidity: 100
-  symbols:
-    - AAPL
-    - TSLA
+  symbols: ${PAPERSTOCK_DEFAULT_SYMBOLS:}
   alpaca:
     base-url: ${ALPACA_BASE_URL:https://paper-api.alpaca.markets}
     data-base-url: ${ALPACA_DATA_BASE_URL:https://data.alpaca.markets}
     api-key: ${ALPACA_API_KEY:}
     api-secret: ${ALPACA_API_SECRET:}
   market-data:
-    provider: ${MARKET_DATA_PROVIDER:yahoo}
+    provider: ${MARKET_DATA_PROVIDER:finnhub}
     base-url: ${MARKET_DATA_BASE_URL:https://api.exchangerate.host}
     max-stale-seconds: ${MARKET_DATA_MAX_STALE_SECONDS:120}
+    finnhub:
+      base-url: ${FINNHUB_BASE_URL:https://finnhub.io/api/v1}
+      api-key: ${FINNHUB_API_KEY:}
     yahoo:
       quote-base-url: ${YAHOO_QUOTE_BASE_URL:https://query1.finance.yahoo.com}
       chart-base-url: ${YAHOO_CHART_BASE_URL:https://query2.finance.yahoo.com}

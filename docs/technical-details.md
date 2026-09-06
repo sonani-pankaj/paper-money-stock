@@ -42,7 +42,7 @@ flowchart LR
     Adapter --> Alp[Alpaca Adapter]
     Strategy --> Market[Market Data Service]
     AI --> Market
-    Market --> External[(Yahoo/TwelveData/Alpaca Data)]
+    Market --> External[(Finnhub/Yahoo/TwelveData/Alpaca Data)]
     API --> DB[(H2 or PostgreSQL)]
     Strategy --> DB
     Trading --> DB
@@ -92,6 +92,8 @@ Profile override:
 - paperstock.symbols
 - paperstock.market-data.provider
 - paperstock.market-data.max-stale-seconds
+- paperstock.market-data.finnhub.base-url
+- paperstock.market-data.finnhub.api-key
 - paperstock.market-data.yahoo.quote-base-url
 - paperstock.market-data.yahoo.chart-base-url
 - paperstock.market-data.yahoo.search-base-url

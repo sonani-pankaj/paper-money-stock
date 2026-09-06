@@ -95,21 +95,19 @@ public class AutomatedStrategyService {
 
         PositionEntity position = positionRepository.findBySymbol(strategy.getSymbol())
                 .orElse(null);
-        if (position == null || position.getAveragePrice() == null || position.getAveragePrice().compareTo(BigDecimal.ZERO) <= 0) {
-            record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED, "Missing position cost basis");
-            return;
-        }
 
-        BigDecimal referencePrice = position.getAveragePrice();
         MarketSnapshotDto latestSnapshot = marketDataService.refreshAndStore(strategy.getSymbol())
-            .block(Duration.ofSeconds(8));
+                .block(Duration.ofSeconds(8));
 
         BigDecimal currentPrice = latestSnapshot == null ? null : latestSnapshot.price();
-
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            record(strategy, OrderSide.BUY, null, referencePrice, null, StrategyExecutionStatus.SKIPPED, "No current market price");
+            record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED, "No current market price");
             return;
         }
+
+        BigDecimal referencePrice = (position != null && position.getAveragePrice() != null && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0)
+                ? position.getAveragePrice()
+                : currentPrice;
 
         if (latestSnapshot == null || latestSnapshot.capturedAt() == null) {
             record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Missing quote timestamp");
@@ -207,7 +205,7 @@ public class AutomatedStrategyService {
             BigDecimal currentPrice,
             BigDecimal referencePrice
     ) {
-        if (position.getQty() == null || position.getQty().compareTo(BigDecimal.ZERO) <= 0) {
+        if (position == null || position.getQty() == null || position.getQty().compareTo(BigDecimal.ZERO) <= 0) {
             record(strategy, OrderSide.SELL, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "No position quantity to sell");
             return;
         }

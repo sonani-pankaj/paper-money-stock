@@ -53,7 +53,8 @@ flowchart LR
     MKT --> DB
     AI --> DB
 
-    MKT --> Y1[Yahoo Quote API]
+    MKT --> FH[Finnhub API Primary]
+    MKT --> Y1[Yahoo Quote API Fallback]
     MKT --> Y2[Yahoo Chart API Fallback]
     MKT --> T12[TwelveData Fallback]
 
