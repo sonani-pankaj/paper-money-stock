@@ -44,7 +44,7 @@ paperstock:
     max-stale-seconds: ${MARKET_DATA_MAX_STALE_SECONDS:120}
     finnhub:
       base-url: ${FINNHUB_BASE_URL:https://finnhub.io/api/v1}
-      api-key: ${FINNHUB_API_KEY:daeqdt1r01qqo7ntjua0daeqdt1r01qqo7ntjuag}
+      api-key: ${FINNHUB_API_KEY:}
     yahoo:
       quote-base-url: ${YAHOO_QUOTE_BASE_URL:https://query1.finance.yahoo.com}
       chart-base-url: ${YAHOO_CHART_BASE_URL:https://query2.finance.yahoo.com}
