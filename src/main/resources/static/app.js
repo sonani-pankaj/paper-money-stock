@@ -159,6 +159,24 @@ function closeStrategyModal() {
     }
 }
 
+function openSearchModal() {
+    const modal = $("stockSearchModal");
+    if (modal) {
+        modal.classList.remove("hidden");
+        const input = $("stockSearchQuery");
+        if (input) {
+            input.focus();
+        }
+    }
+}
+
+function closeSearchModal() {
+    const modal = $("stockSearchModal");
+    if (modal) {
+        modal.classList.add("hidden");
+    }
+}
+
 function clearForm() {
     $("strategyId").value = "";
     $("strategyForm").reset();
@@ -175,6 +193,7 @@ function clearForm() {
 
 function startNewStrategyForSymbol(symbol) {
     clearForm();
+    closeSearchModal();
     const normalized = String(symbol || "").toUpperCase();
     $("symbol").value = normalized;
     openStrategyModal();
@@ -208,6 +227,7 @@ async function onHoldingsTableClick(event) {
     const action = btn.dataset.holdingAction;
     if (action === "edit") {
         $("holdingSymbol").value = row.symbol;
+        if ($("holdingMode")) $("holdingMode").value = row.mode || "simulator";
         $("holdingQty").value = Number(row.qty || 0);
         $("holdingBuyPrice").value = Number(row.avg || 0);
         $("holdingQty").focus();
@@ -436,7 +456,7 @@ async function refreshAiDecision() {
         return;
     }
 
-    const market = await api(`/api/market/latest?symbol=${encodeURIComponent(symbol)}&refresh=true`);
+    const market = await api(`/api/market/latest?symbol=${encodeURIComponent(symbol)}&refresh=false`);
     const currentPrice = Number(market.price);
     const decision = await api(
         `/api/ai/decision?symbol=${encodeURIComponent(symbol)}&buyDropPercent=${strategy.buyDropPercent}&sellRisePercent=${strategy.sellRisePercent}&currentPrice=${currentPrice}`
@@ -560,9 +580,54 @@ function renderActivity() {
 
 async function loadAccount() {
     const account = await api("/api/account");
-    $("accountMode").textContent = account.mode;
-    $("accountCash").textContent = toMoney(account.cash);
+    const modeSelect = $("accountModeSelect");
+    if (modeSelect && document.activeElement !== modeSelect) {
+        modeSelect.value = account.mode || "simulator";
+    }
+    const cashInput = $("accountCashInput");
+    if (cashInput && document.activeElement !== cashInput) {
+        cashInput.value = account.cash != null ? Number(account.cash) : 100000;
+    }
     $("accountEquity").textContent = toMoney(account.equity);
+}
+
+async function updateAccountMode() {
+    const modeSelect = $("accountModeSelect");
+    if (!modeSelect) return;
+    const newMode = modeSelect.value;
+    try {
+        const updated = await api("/api/account", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: newMode })
+        });
+        const selectedText = modeSelect.options[modeSelect.selectedIndex] ? modeSelect.options[modeSelect.selectedIndex].text : newMode;
+        showToast(`Account mode updated to ${selectedText}`, "success");
+        await refreshAll();
+    } catch (error) {
+        showError(error);
+    }
+}
+
+async function saveAccountCash() {
+    const cashInput = $("accountCashInput");
+    if (!cashInput) return;
+    const cashVal = parseFloat(cashInput.value);
+    if (isNaN(cashVal) || cashVal < 0) {
+        showToast("Please enter a valid cash amount (>= 0)", "error");
+        return;
+    }
+    try {
+        const updated = await api("/api/account", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cash: cashVal })
+        });
+        showToast(`Cash balance updated to ${toMoney(updated.cash)}`, "success");
+        await refreshAll();
+    } catch (error) {
+        showError(error);
+    }
 }
 
 async function loadMarketConfig() {
@@ -571,29 +636,59 @@ async function loadMarketConfig() {
     $("marketMaxStale").textContent = String(config.maxStaleSeconds);
 }
 
+function formatModeLabel(mode) {
+    if (!mode) return "Simulator";
+    const map = {
+        simulator: "Simulator",
+        alpaca: "Alpaca",
+        interactive_brokers: "IBKR",
+        td_ameritrade: "TD Ameritrade",
+        webull: "Webull",
+        e_trade: "E*TRADE",
+        robinhood: "Robinhood"
+    };
+    return map[mode.toLowerCase()] || mode;
+}
+
 async function loadHoldings() {
     const holdings = await api("/api/trade/positions");
-    state.holdingsRows = [];
+    const rows = await Promise.all(
+        holdings.map(async (position) => {
+            const qty = Number(position.qty || 0);
+            const avg = Number(position.averagePrice || 0);
+            let currentPrice = null;
+            try {
+                const market = await api(`/api/market/latest?symbol=${encodeURIComponent(position.symbol)}&refresh=false`);
+                currentPrice = market.price == null ? null : Number(market.price);
+            } catch (error) {
+                currentPrice = null;
+            }
 
-    for (const position of holdings) {
-        const qty = Number(position.qty || 0);
-        const avg = Number(position.averagePrice || 0);
-        let currentPrice = null;
-        try {
-            const market = await api(`/api/market/latest?symbol=${encodeURIComponent(position.symbol)}&refresh=true`);
-            currentPrice = market.price == null ? null : Number(market.price);
-        } catch (error) {
-            currentPrice = null;
-        }
+            const pnl = currentPrice == null ? null : (currentPrice - avg) * qty;
+            return {
+                symbol: position.symbol,
+                mode: position.mode || "simulator",
+                qty,
+                avg,
+                currentPrice,
+                pnl
+            };
+        })
+    );
 
-        const pnl = currentPrice == null ? null : (currentPrice - avg) * qty;
-        state.holdingsRows.push({
-            symbol: position.symbol,
-            qty,
-            avg,
-            currentPrice,
-            pnl
-        });
+    const uniqueMap = new Map();
+    for (const row of rows) {
+        uniqueMap.set(row.symbol.toUpperCase(), row);
+    }
+
+    state.holdingsRows = Array.from(uniqueMap.values());
+
+    const totalEquity = state.holdingsRows.reduce((sum, row) => {
+        const liveOrAvgPrice = row.currentPrice != null ? row.currentPrice : row.avg;
+        return sum + (liveOrAvgPrice * row.qty);
+    }, 0);
+    if ($("accountEquity")) {
+        $("accountEquity").textContent = toMoney(totalEquity);
     }
 
     renderHoldings();
@@ -602,6 +697,7 @@ async function loadHoldings() {
 async function saveManualHolding(event) {
     event.preventDefault();
     const symbol = $("holdingSymbol").value.trim().toUpperCase();
+    const mode = $("holdingMode") ? $("holdingMode").value : "simulator";
     const qty = Number($("holdingQty").value);
     const buyPrice = Number($("holdingBuyPrice").value);
 
@@ -613,11 +709,14 @@ async function saveManualHolding(event) {
     try {
         await api("/api/trade/positions", {
             method: "POST",
-            body: JSON.stringify({ symbol, qty, buyPrice })
+            body: JSON.stringify({ symbol, mode, qty, buyPrice })
         });
         showToast(`Holding updated for ${symbol}.`);
         $("manualHoldingForm").reset();
         $("holdingQty").value = "1";
+        if ($("accountModeSelect") && $("holdingMode")) {
+            $("holdingMode").value = $("accountModeSelect").value || "simulator";
+        }
         await loadHoldings();
     } catch (error) {
         showError(error);
@@ -630,7 +729,8 @@ function renderHoldings() {
     body.innerHTML = "";
 
     for (const position of state.holdingsRows) {
-        const searchable = `${position.symbol} ${position.qty} ${position.avg} ${position.currentPrice} ${position.pnl}`;
+        const modeLabel = formatModeLabel(position.mode);
+        const searchable = `${position.symbol} ${position.mode} ${modeLabel} ${position.qty} ${position.avg} ${position.currentPrice} ${position.pnl}`;
         if (!includesFilter(searchable, filter)) {
             continue;
         }
@@ -639,6 +739,7 @@ function renderHoldings() {
         const pnlText = position.pnl == null ? "-" : toMoney(position.pnl);
         tr.innerHTML = `
             <td class="mono">${position.symbol}</td>
+            <td><span class="mode-tag">${escapeHtml(modeLabel)}</span></td>
             <td>${toNum(position.qty)}</td>
             <td>${toMoney(position.avg)}</td>
             <td>${currentPriceText}</td>
@@ -811,6 +912,8 @@ bind("holdingsBody", "click", (e) => {
     onHoldingsTableClick(e).catch(showError);
 });
 bind("clearFormBtn", "click", clearForm);
+bind("openSearchModalBtn", "click", openSearchModal);
+bind("closeSearchModalBtn", "click", closeSearchModal);
 bind("closeStrategyModalBtn", "click", closeStrategyModal);
 bind("cancelStrategyModalBtn", "click", closeStrategyModal);
 bind("refreshAllBtn", "click", () => onRefreshAllClick().catch(showError));
@@ -825,17 +928,29 @@ bind("stockSearchQuery", "keydown", (e) => {
         searchStocks().catch(showError);
     }
 });
+bind("accountModeSelect", "change", () => {
+    updateAccountMode().catch(showError);
+});
+bind("saveCashBtn", "click", () => {
+    saveAccountCash().catch(showError);
+});
+bind("accountCashInput", "keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        saveAccountCash().catch(showError);
+    }
+});
 
 const HELP_DATA = {
     account: {
         title: "Account Snapshot Help",
         body: `
             <p><strong>Overview:</strong> Displays your account balance, trading mode, and market data status in real time.</p>
-            <h4>Fields Explained:</h4>
+            <h4>Fields & Controls Explained:</h4>
             <ul>
-                <li><code>Mode</code>: Current trading mode (e.g. <em>simulator</em> for local paper trading, or <em>alpaca</em> for broker API).</li>
-                <li><code>Cash</code>: Your uninvested liquid cash available to execute BUY orders.</li>
-                <li><code>Equity</code>: Total portfolio value (Cash + Market value of all held stock positions).</li>
+                <li><code>Mode</code>: Select your active trading mode (e.g. <em>Simulator (Paper)</em> for local paper trading, or live stock brokers such as <em>Alpaca</em>, <em>Interactive Brokers</em>, <em>TD Ameritrade</em>, <em>Webull</em>, <em>E*TRADE</em>, or <em>Robinhood</em>).</li>
+                <li><code>Cash</code>: Editable liquid cash balance available to execute BUY orders. Enter any cash amount and click <strong>Save</strong>.</li>
+                <li><code>Holdings Equity</code>: Total market value of all active stock positions held in your portfolio.</li>
                 <li><code>Quotes Provider</code>: Active market data provider (e.g. <em>finnhub</em>) and maximum quote stale seconds.</li>
             </ul>
         `
@@ -855,15 +970,16 @@ const HELP_DATA = {
     holdings: {
         title: "Holdings and P&L Help",
         body: `
-            <p><strong>Overview:</strong> Manage your current portfolio stock holdings, view purchase cost basis, and monitor live unrealized P&L.</p>
+            <p><strong>Overview:</strong> Manage your current portfolio stock holdings, select execution modes, view purchase cost basis, and monitor live unrealized P&L.</p>
             <h4>Fields & Actions Explained:</h4>
             <ul>
                 <li><code>Symbol</code>: Stock ticker of the holding.</li>
+                <li><code>Mode</code>: Execution mode or broker managing this position (e.g. <em>Simulator</em>, <em>Alpaca</em>, <em>IBKR</em>, <em>TD Ameritrade</em>, <em>Webull</em>, <em>E*TRADE</em>, <em>Robinhood</em>).</li>
                 <li><code>Qty</code>: Number of shares owned.</li>
                 <li><code>Buy Price</code>: Your purchase cost basis per share ($). Used as the reference price for strategy rules!</li>
                 <li><code>Current Live Price</code>: Latest real-time stock price fetched from the market data provider.</li>
                 <li><code>Unrealized P&L</code>: Profit or loss on the position (<code>(Live Price - Buy Price) × Qty</code>).</li>
-                <li><code>Add/Update Holding Form</code>: Manually add new positions or adjust share qty & cost basis.</li>
+                <li><code>Add/Update Holding Form</code>: Manually add new positions or adjust share qty, cost basis & execution mode.</li>
                 <li><code>Add to Strategy</code>: Opens Strategy Config modal to set auto-buy and auto-sell rules for this holding.</li>
             </ul>
         `
@@ -900,12 +1016,17 @@ const HELP_DATA = {
     ai: {
         title: "AI Insights & One-Click Backtest Help",
         body: `
-            <p><strong>Overview:</strong> View real-time AI sentiment analysis, dynamic volatility adjustments, and run historical side-by-side strategy simulations.</p>
-            <h4>Sections Explained:</h4>
+            <p><strong>Overview:</strong> View real-time AI sentiment analysis, dynamic volatility adjustments, LIVE AI Decision criteria, and run historical side-by-side strategy simulations.</p>
+            <h4>Sections & LIVE AI Decision Fields Explained:</h4>
             <ul>
-                <li><code>Current Sentiment</code>: Aggregated news & market sentiment score (-1.0 Bearish to +1.0 Bullish).</li>
-                <li><code>Live AI Decision</code>: Displays buy/sell probabilities, volatility-scaled dynamic thresholds, and AI signal gating status.</li>
-                <li><code>One-Click Backtest</code>: Compares <strong>AI-Enabled</strong> vs <strong>Rule-Only</strong> performance on historical price snapshots (Ending Cash, Qty, Value, P&L).</li>
+                <li><code>Current Sentiment Score</code>: Aggregated news & market sentiment score ranging from -1.0 (Bearish) to +1.0 (Bullish).</li>
+                <li><code>Current Live Price</code>: Real-time stock market price evaluated by the AI decision engine.</li>
+                <li><code>Buy Probability</code>: AI model confidence score (0% - 100%) evaluating likelihood of a profitable buy entry. Must exceed the probability threshold (e.g. 55%) to pass.</li>
+                <li><code>Sell Probability</code>: AI model confidence score (0% - 100%) evaluating likelihood of profit-taking or exit.</li>
+                <li><code>Dynamic Buy Drop%</code>: Volatility-adjusted buy drop threshold. Scales your base drop % dynamically based on historical price volatility.</li>
+                <li><code>Dynamic Sell Rise%</code>: Volatility-adjusted sell rise threshold. Scales your base rise % dynamically based on price volatility.</li>
+                <li><code>BUY / SELL Gate</code>: Gating decision status (<code>BUY yes/no / SELL yes/no</code>). Shows whether AI signal thresholds and sentiment requirements allow trade execution.</li>
+                <li><code>One-Click Backtest (AI vs Rule-Only)</code>: Simulates your strategy on past price data comparing <strong>AI-Enabled</strong> vs <strong>Rule-Only</strong> results (Ending Cash, Qty, Total Value, and Net P&L).</li>
             </ul>
         `
     },
@@ -971,4 +1092,4 @@ document.addEventListener("click", (e) => {
 });
 
 refreshAll().catch(showError);
-setInterval(() => refreshAll().catch(showError), 10000);
+setInterval(() => refreshAll().catch(showError), 60000);

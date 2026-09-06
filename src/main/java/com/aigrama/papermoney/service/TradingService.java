@@ -6,11 +6,14 @@ import com.aigrama.papermoney.dto.ManualHoldingRequestDto;
 import com.aigrama.papermoney.dto.OrderDto;
 import com.aigrama.papermoney.dto.PlaceOrderRequestDto;
 import com.aigrama.papermoney.dto.PositionDto;
+import com.aigrama.papermoney.dto.UpdateAccountRequestDto;
+import com.aigrama.papermoney.entity.AccountStateEntity;
 import com.aigrama.papermoney.entity.OrderEntity;
 import com.aigrama.papermoney.entity.OrderSide;
 import com.aigrama.papermoney.entity.OrderStatus;
 import com.aigrama.papermoney.entity.OrderType;
 import com.aigrama.papermoney.entity.PositionEntity;
+import com.aigrama.papermoney.repository.AccountStateRepository;
 import com.aigrama.papermoney.repository.OrderRepository;
 import com.aigrama.papermoney.repository.PositionRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +27,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Use-case service for validation, audit and delegation.
+ * Use-case service for validation, audit, account settings, and delegation.
  */
 @Service
 public class TradingService {
@@ -32,18 +35,21 @@ public class TradingService {
     private final TradingAdapter tradingAdapter;
     private final OrderRepository orderRepository;
     private final PositionRepository positionRepository;
-    private final String mode;
+    private final AccountStateRepository accountStateRepository;
+    private final String defaultMode;
 
     public TradingService(
             TradingAdapter tradingAdapter,
             OrderRepository orderRepository,
             PositionRepository positionRepository,
-            @Value("${paperstock.mode:simulator}") String mode
+            AccountStateRepository accountStateRepository,
+            @Value("${paperstock.mode:simulator}") String defaultMode
     ) {
         this.tradingAdapter = tradingAdapter;
         this.orderRepository = orderRepository;
         this.positionRepository = positionRepository;
-        this.mode = mode;
+        this.accountStateRepository = accountStateRepository;
+        this.defaultMode = defaultMode;
     }
 
     public Mono<OrderDto> placeOrder(PlaceOrderRequestDto request) {
@@ -67,11 +73,39 @@ public class TradingService {
         return tradingAdapter.getAccount();
     }
 
-    public Mono<PositionDto> upsertManualHolding(ManualHoldingRequestDto request) {
-        if (!"simulator".equalsIgnoreCase(mode)) {
-            return Mono.error(new IllegalArgumentException("Manual holdings are only supported in simulator mode"));
-        }
+    public Mono<AccountDto> updateAccount(UpdateAccountRequestDto request) {
+        return Mono.fromCallable(() -> {
+            AccountStateEntity accountState = accountStateRepository.findById("DEFAULT")
+                    .orElseGet(() -> {
+                        AccountStateEntity entity = new AccountStateEntity();
+                        entity.setId("DEFAULT");
+                        entity.setMode(defaultMode);
+                        entity.setCash(BigDecimal.valueOf(100_000));
+                        entity.setUpdatedAt(LocalDateTime.now());
+                        return accountStateRepository.save(entity);
+                    });
 
+            if (request.mode() != null && !request.mode().isBlank()) {
+                accountState.setMode(request.mode().trim().toLowerCase());
+            }
+            if (request.cash() != null) {
+                if (request.cash().compareTo(BigDecimal.ZERO) < 0) {
+                    throw new IllegalArgumentException("Cash balance cannot be negative");
+                }
+                accountState.setCash(request.cash());
+            }
+            accountState.setUpdatedAt(LocalDateTime.now());
+            AccountStateEntity saved = accountStateRepository.save(accountState);
+
+            BigDecimal equity = positionRepository.findAll().stream()
+                    .map(position -> position.getAveragePrice().multiply(position.getQty()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            return new AccountDto(saved.getMode(), saved.getCash(), equity);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<PositionDto> upsertManualHolding(ManualHoldingRequestDto request) {
         if (request.qty() == null || request.qty().compareTo(BigDecimal.ZERO) <= 0) {
             return Mono.error(new IllegalArgumentException("qty must be > 0"));
         }
@@ -81,26 +115,28 @@ public class TradingService {
 
         String symbol = request.symbol().toUpperCase();
         return Mono.fromCallable(() -> {
+                    AccountStateEntity accountState = accountStateRepository.findById("DEFAULT").orElse(null);
+                    String effectiveMode = request.mode() != null && !request.mode().isBlank()
+                            ? request.mode().trim().toLowerCase()
+                            : (accountState != null && accountState.getMode() != null ? accountState.getMode() : "simulator");
+
                     PositionEntity position = positionRepository.findBySymbol(symbol).orElseGet(() -> {
                         PositionEntity created = new PositionEntity();
                         created.setId(UUID.randomUUID());
                         created.setSymbol(symbol);
                         return created;
                     });
+                    position.setMode(effectiveMode);
                     position.setQty(request.qty());
                     position.setAveragePrice(request.buyPrice());
                     position.setUpdatedAt(LocalDateTime.now());
                     PositionEntity saved = positionRepository.save(position);
-                    return new PositionDto(saved.getSymbol(), saved.getQty(), saved.getAveragePrice());
+                    return new PositionDto(saved.getSymbol(), saved.getMode(), saved.getQty(), saved.getAveragePrice());
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<Void> deleteManualHolding(String symbol) {
-        if (!"simulator".equalsIgnoreCase(mode)) {
-            return Mono.error(new IllegalArgumentException("Manual holdings are only supported in simulator mode"));
-        }
-
         String normalized = symbol == null ? "" : symbol.trim().toUpperCase();
         if (normalized.isBlank()) {
             return Mono.error(new IllegalArgumentException("symbol is required"));
@@ -126,10 +162,6 @@ public class TradingService {
     }
 
     private Mono<Void> persistAuditIfNeeded(PlaceOrderRequestDto request) {
-        if (!"alpaca".equalsIgnoreCase(mode)) {
-            return Mono.empty();
-        }
-
         return Mono.fromRunnable(() -> {
             OrderEntity entity = new OrderEntity();
             entity.setId(UUID.randomUUID());

@@ -30,7 +30,9 @@ paperstock:
   mode: simulator
   fee-percentage: 0.001
   available-liquidity: 100
-  symbols: ${PAPERSTOCK_DEFAULT_SYMBOLS:}
+  symbols:
+    - AAPL
+    - TSLA
   alpaca:
     base-url: ${ALPACA_BASE_URL:https://paper-api.alpaca.markets}
     data-base-url: ${ALPACA_DATA_BASE_URL:https://data.alpaca.markets}
@@ -42,7 +44,7 @@ paperstock:
     max-stale-seconds: ${MARKET_DATA_MAX_STALE_SECONDS:120}
     finnhub:
       base-url: ${FINNHUB_BASE_URL:https://finnhub.io/api/v1}
-      api-key: ${FINNHUB_API_KEY:}
+      api-key: ${FINNHUB_API_KEY:daeqdt1r01qqo7ntjua0daeqdt1r01qqo7ntjuag}
     yahoo:
       quote-base-url: ${YAHOO_QUOTE_BASE_URL:https://query1.finance.yahoo.com}
       chart-base-url: ${YAHOO_CHART_BASE_URL:https://query2.finance.yahoo.com}
@@ -50,10 +52,10 @@ paperstock:
     twelvedata:
       base-url: ${TWELVEDATA_BASE_URL:https://api.twelvedata.com}
       api-key: ${TWELVEDATA_API_KEY:demo}
-    poll-ms: 30000
+    poll-ms: 60000
   strategy:
     enabled: true
-    eval-ms: 30000
+    eval-ms: 60000
   ai:
     enabled: ${PAPERSTOCK_AI_ENABLED:true}
     sentiment:

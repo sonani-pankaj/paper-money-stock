@@ -7,6 +7,7 @@ import java.math.BigDecimal;
  */
 public record PositionDto(
         String symbol,
+        String mode,
         BigDecimal qty,
         BigDecimal averagePrice
 ) {

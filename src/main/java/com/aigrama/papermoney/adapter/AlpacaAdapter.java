@@ -138,6 +138,7 @@ public class AlpacaAdapter implements TradingAdapter {
     private PositionDto mapPosition(JsonNode node) {
         return new PositionDto(
                 node.path("symbol").asText(),
+                "alpaca",
                 decimal(node.path("qty").asText("0")),
                 decimal(node.path("avg_entry_price").asText("0"))
         );

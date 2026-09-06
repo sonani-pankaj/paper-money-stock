@@ -19,7 +19,10 @@
         <h1>PaperStock Automation</h1>
         <p>Configure per-stock triggers and monitor automated buys and sells.</p>
     </div>
-    <button id="refreshAllBtn" class="btn primary">Refresh</button>
+    <div class="header-actions">
+        <button id="openSearchModalBtn" type="button" class="btn">🔍 Search Stock</button>
+        <button id="refreshAllBtn" type="button" class="btn primary">Refresh</button>
+    </div>
 </header>
 
 <main class="shell grid">
@@ -30,56 +33,32 @@
         </div>
         <div class="metric-row">
             <div class="metric">
-                <span>Mode</span>
-                <strong id="accountMode">-</strong>
+                <label for="accountModeSelect" class="metric-label">Mode</label>
+                <select id="accountModeSelect" class="account-select">
+                    <option value="simulator">Simulator (Paper)</option>
+                    <option value="alpaca">Alpaca Brokerage</option>
+                    <option value="interactive_brokers">Interactive Brokers</option>
+                    <option value="td_ameritrade">TD Ameritrade / Schwab</option>
+                    <option value="webull">Webull</option>
+                    <option value="e_trade">E*TRADE</option>
+                    <option value="robinhood">Robinhood</option>
+                </select>
             </div>
             <div class="metric">
-                <span>Cash</span>
-                <strong id="accountCash">-</strong>
+                <label for="accountCashInput" class="metric-label">Cash</label>
+                <div class="cash-input-group">
+                    <span class="currency-symbol">$</span>
+                    <input type="number" id="accountCashInput" class="account-cash-input" step="100" min="0" placeholder="100000" />
+                    <button type="button" id="saveCashBtn" class="btn-save-cash" title="Save Cash Amount">Save</button>
+                </div>
             </div>
             <div class="metric">
-                <span>Equity</span>
+                <span class="metric-label">Holdings Equity</span>
                 <strong id="accountEquity">-</strong>
             </div>
         </div>
         <p class="hint">Quotes: <span id="marketProvider" class="mono">-</span> provider, stale after <span id="marketMaxStale" class="mono">-</span>s.</p>
         <p class="hint">P&L values in holdings are derived from latest market snapshots.</p>
-    </section>
-
-    <section class="panel col-2">
-        <div class="panel-header">
-            <h2>Stock Search and Add Holdings</h2>
-            <button type="button" class="help-btn" data-help="search" title="Card Info">?</button>
-        </div>
-        <form id="stockSearchForm" class="search-layout">
-            <label>Search Stock
-                <div class="search-row">
-                    <input id="stockSearchQuery" placeholder="Type symbol or company name" />
-                    <button type="submit" id="stockSearchBtn" class="btn">Find</button>
-                </div>
-            </label>
-        </form>
-
-        <div class="search-results standalone">
-            <div class="search-results-head">
-                <strong>Results</strong>
-                <span class="hint hint-inline">Fill Strategy opens strategy config modal.</span>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Symbol</th>
-                        <th>Name</th>
-                        <th>Exchange</th>
-                        <th>Live Price</th>
-                        <th>Action</th>
-                    </tr>
-                    </thead>
-                    <tbody id="stockSearchBody"></tbody>
-                </table>
-            </div>
-        </div>
     </section>
 
     <section class="panel col-2">
@@ -92,6 +71,17 @@
             <label>Symbol
                 <input id="holdingSymbol" placeholder="AAPL" maxlength="12" required />
             </label>
+            <label>Mode
+                <select id="holdingMode" class="account-select">
+                    <option value="simulator">Simulator (Paper)</option>
+                    <option value="alpaca">Alpaca Brokerage</option>
+                    <option value="interactive_brokers">Interactive Brokers</option>
+                    <option value="td_ameritrade">TD Ameritrade / Schwab</option>
+                    <option value="webull">Webull</option>
+                    <option value="e_trade">E*TRADE</option>
+                    <option value="robinhood">Robinhood</option>
+                </select>
+            </label>
             <label>Qty
                 <input id="holdingQty" type="number" min="0.000001" step="0.000001" value="1" required />
             </label>
@@ -101,13 +91,14 @@
             <button type="submit" class="btn">Add/Update Holding</button>
         </form>
         <label class="inline-field">Search Holdings
-            <input id="holdingsFilter" placeholder="Filter by symbol, qty, or P&L" />
+            <input id="holdingsFilter" placeholder="Filter by symbol, mode, qty, or P&L" />
         </label>
         <div class="table-wrap">
             <table>
                 <thead>
                 <tr>
                     <th>Symbol</th>
+                    <th>Mode</th>
                     <th>Qty</th>
                     <th>Buy Price</th>
                     <th>Current Live Price</th>
@@ -275,6 +266,44 @@
         </div>
     </section>
 </main>
+
+<div id="stockSearchModal" class="modal-backdrop hidden">
+    <div class="modal-content panel">
+        <div class="modal-header">
+            <h3>Stock Search & Live Quotes</h3>
+            <button type="button" id="closeSearchModalBtn" class="btn-close">&times;</button>
+        </div>
+        <form id="stockSearchForm" class="search-layout">
+            <label>Search Stock
+                <div class="search-row">
+                    <input id="stockSearchQuery" placeholder="Type symbol or company name" />
+                    <button type="submit" id="stockSearchBtn" class="btn primary">Find</button>
+                </div>
+            </label>
+        </form>
+
+        <div class="search-results standalone">
+            <div class="search-results-head">
+                <strong>Results</strong>
+                <span class="hint hint-inline">Fill Strategy opens strategy config modal.</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Name</th>
+                        <th>Exchange</th>
+                        <th>Live Price</th>
+                        <th>Action</th>
+                    </tr>
+                    </thead>
+                    <tbody id="stockSearchBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div id="strategyModal" class="modal-backdrop hidden">
     <div class="modal-content panel">

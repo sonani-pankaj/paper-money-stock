@@ -22,6 +22,9 @@ public class PositionEntity {
     @Column(nullable = false, unique = true)
     private String symbol;
 
+    @Column(name = "mode", nullable = false)
+    private String mode = "simulator";
+
     @Column(nullable = false, precision = 19, scale = 6)
     private BigDecimal qty;
 
@@ -45,6 +48,14 @@ public class PositionEntity {
 
     public void setSymbol(String symbol) {
         this.symbol = symbol;
+    }
+
+    public String getMode() {
+        return mode;
+    }
+
+    public void setMode(String mode) {
+        this.mode = mode;
     }
 
     public BigDecimal getQty() {

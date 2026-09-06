@@ -11,6 +11,7 @@ import java.math.BigDecimal;
  */
 public record ManualHoldingRequestDto(
         @NotBlank String symbol,
+        String mode,
         @NotNull @DecimalMin("0.000001") BigDecimal qty,
         @NotNull @DecimalMin("0.000001") BigDecimal buyPrice
 ) {

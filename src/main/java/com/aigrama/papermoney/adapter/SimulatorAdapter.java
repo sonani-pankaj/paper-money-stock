@@ -4,17 +4,18 @@ import com.aigrama.papermoney.dto.AccountDto;
 import com.aigrama.papermoney.dto.OrderDto;
 import com.aigrama.papermoney.dto.PlaceOrderRequestDto;
 import com.aigrama.papermoney.dto.PositionDto;
+import com.aigrama.papermoney.entity.AccountStateEntity;
 import com.aigrama.papermoney.entity.OrderEntity;
 import com.aigrama.papermoney.entity.OrderSide;
 import com.aigrama.papermoney.entity.OrderStatus;
 import com.aigrama.papermoney.entity.OrderType;
 import com.aigrama.papermoney.entity.PositionEntity;
+import com.aigrama.papermoney.repository.AccountStateRepository;
 import com.aigrama.papermoney.repository.OrderRepository;
 import com.aigrama.papermoney.repository.PositionRepository;
 import com.aigrama.papermoney.repository.TradeRepository;
 import com.aigrama.papermoney.service.MarketDataService;
 import com.aigrama.papermoney.simulator.MatchingEngine;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -30,7 +31,6 @@ import java.util.UUID;
  * Local simulation-backed trading implementation.
  */
 @Component
-@ConditionalOnProperty(name = "paperstock.mode", havingValue = "simulator", matchIfMissing = true)
 public class SimulatorAdapter implements TradingAdapter {
 
     private final MatchingEngine matchingEngine;
@@ -38,19 +38,22 @@ public class SimulatorAdapter implements TradingAdapter {
     private final OrderRepository orderRepository;
     private final TradeRepository tradeRepository;
     private final PositionRepository positionRepository;
+    private final AccountStateRepository accountStateRepository;
 
     public SimulatorAdapter(
             MatchingEngine matchingEngine,
             MarketDataService marketDataService,
             OrderRepository orderRepository,
             TradeRepository tradeRepository,
-            PositionRepository positionRepository
+            PositionRepository positionRepository,
+            AccountStateRepository accountStateRepository
     ) {
         this.matchingEngine = matchingEngine;
         this.marketDataService = marketDataService;
         this.orderRepository = orderRepository;
         this.tradeRepository = tradeRepository;
         this.positionRepository = positionRepository;
+        this.accountStateRepository = accountStateRepository;
     }
 
     @Override
@@ -83,10 +86,11 @@ public class SimulatorAdapter implements TradingAdapter {
     @Override
     public Mono<AccountDto> getAccount() {
         return Mono.fromCallable(() -> {
+            AccountStateEntity accountState = getOrCreateAccountState();
             BigDecimal equity = positionRepository.findAll().stream()
                     .map(position -> position.getAveragePrice().multiply(position.getQty()))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            return new AccountDto("simulator", BigDecimal.valueOf(100_000), equity);
+            return new AccountDto(accountState.getMode(), accountState.getCash(), equity);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -156,9 +160,31 @@ public class SimulatorAdapter implements TradingAdapter {
             position.setAveragePrice(newAvg);
         }
 
+        AccountStateEntity accountState = getOrCreateAccountState();
+        position.setMode(accountState.getMode() != null ? accountState.getMode() : "simulator");
         position.setQty(newQty);
         position.setUpdatedAt(LocalDateTime.now());
         positionRepository.save(position);
+
+        BigDecimal tradeAmount = fillPrice.multiply(fillQty);
+        if (order.getSide() == OrderSide.BUY) {
+            accountState.setCash(accountState.getCash().subtract(tradeAmount).max(BigDecimal.ZERO));
+        } else if (order.getSide() == OrderSide.SELL) {
+            accountState.setCash(accountState.getCash().add(tradeAmount));
+        }
+        accountState.setUpdatedAt(LocalDateTime.now());
+        accountStateRepository.save(accountState);
+    }
+
+    private AccountStateEntity getOrCreateAccountState() {
+        return accountStateRepository.findById("DEFAULT").orElseGet(() -> {
+            AccountStateEntity entity = new AccountStateEntity();
+            entity.setId("DEFAULT");
+            entity.setMode("simulator");
+            entity.setCash(BigDecimal.valueOf(100_000));
+            entity.setUpdatedAt(LocalDateTime.now());
+            return accountStateRepository.save(entity);
+        });
     }
 
     private OrderDto mapOrder(OrderEntity entity) {
@@ -175,6 +201,11 @@ public class SimulatorAdapter implements TradingAdapter {
     }
 
     private PositionDto mapPosition(PositionEntity entity) {
-        return new PositionDto(entity.getSymbol(), entity.getQty(), entity.getAveragePrice());
+        return new PositionDto(
+                entity.getSymbol(),
+                entity.getMode() != null ? entity.getMode() : "simulator",
+                entity.getQty(),
+                entity.getAveragePrice()
+        );
     }
 }
