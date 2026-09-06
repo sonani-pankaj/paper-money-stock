@@ -4,6 +4,7 @@ import com.aigrama.papermoney.dto.StrategyConfigDto;
 import com.aigrama.papermoney.dto.StrategyConfigRequestDto;
 import com.aigrama.papermoney.entity.StrategyConfigEntity;
 import com.aigrama.papermoney.repository.StrategyConfigRepository;
+import com.aigrama.papermoney.repository.StrategyExecutionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,9 +20,14 @@ import java.util.UUID;
 public class StrategyConfigService {
 
     private final StrategyConfigRepository strategyConfigRepository;
+    private final StrategyExecutionRepository strategyExecutionRepository;
 
-    public StrategyConfigService(StrategyConfigRepository strategyConfigRepository) {
+    public StrategyConfigService(
+            StrategyConfigRepository strategyConfigRepository,
+            StrategyExecutionRepository strategyExecutionRepository
+    ) {
         this.strategyConfigRepository = strategyConfigRepository;
+        this.strategyExecutionRepository = strategyExecutionRepository;
     }
 
     @Transactional
@@ -81,6 +87,15 @@ public class StrategyConfigService {
         entity.setActive(true);
         entity.setUpdatedAt(LocalDateTime.now());
         return toDto(strategyConfigRepository.save(entity));
+    }
+
+    @Transactional
+    public void delete(String strategyId) {
+        UUID id = UUID.fromString(strategyId);
+        StrategyConfigEntity entity = strategyConfigRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Strategy not found: " + strategyId));
+        strategyExecutionRepository.deleteByStrategyConfigId(entity.getId());
+        strategyConfigRepository.delete(entity);
     }
 
     private void validateThresholds(StrategyConfigRequestDto request) {

@@ -1,13 +1,24 @@
 package com.aigrama.papermoney.controller;
 
 import com.aigrama.papermoney.dto.StrategyConfigDto;
+import com.aigrama.papermoney.dto.StrategyChartPointDto;
+import com.aigrama.papermoney.dto.StrategyChartSeriesDto;
 import com.aigrama.papermoney.dto.StrategyConfigRequestDto;
 import com.aigrama.papermoney.dto.StrategyExecutionDto;
+import com.aigrama.papermoney.entity.MarketSnapshotEntity;
+import com.aigrama.papermoney.entity.PositionEntity;
+import com.aigrama.papermoney.entity.StrategyConfigEntity;
 import com.aigrama.papermoney.entity.StrategyExecutionEntity;
+import com.aigrama.papermoney.repository.MarketSnapshotRepository;
+import com.aigrama.papermoney.repository.PositionRepository;
+import com.aigrama.papermoney.repository.StrategyConfigRepository;
 import com.aigrama.papermoney.repository.StrategyExecutionRepository;
 import com.aigrama.papermoney.service.StrategyConfigService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,9 +26,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * API endpoints for strategy config and activity monitoring.
@@ -29,13 +43,22 @@ public class StrategyController {
 
     private final StrategyConfigService strategyConfigService;
     private final StrategyExecutionRepository strategyExecutionRepository;
+    private final StrategyConfigRepository strategyConfigRepository;
+    private final MarketSnapshotRepository marketSnapshotRepository;
+    private final PositionRepository positionRepository;
 
     public StrategyController(
             StrategyConfigService strategyConfigService,
-            StrategyExecutionRepository strategyExecutionRepository
+            StrategyExecutionRepository strategyExecutionRepository,
+            StrategyConfigRepository strategyConfigRepository,
+            MarketSnapshotRepository marketSnapshotRepository,
+            PositionRepository positionRepository
     ) {
         this.strategyConfigService = strategyConfigService;
         this.strategyExecutionRepository = strategyExecutionRepository;
+        this.strategyConfigRepository = strategyConfigRepository;
+        this.marketSnapshotRepository = marketSnapshotRepository;
+        this.positionRepository = positionRepository;
     }
 
     @PostMapping
@@ -63,6 +86,12 @@ public class StrategyController {
         return strategyConfigService.resume(id);
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable("id") String id) {
+        strategyConfigService.delete(id);
+    }
+
     @GetMapping("/activity")
     public List<StrategyExecutionDto> activity(@RequestParam(value = "symbol", required = false) String symbol) {
         List<StrategyExecutionEntity> executions = (symbol == null || symbol.isBlank())
@@ -78,6 +107,51 @@ public class StrategyController {
                 .map(this::toDto)
                 .toList();
     }
+
+        @GetMapping("/{id}/chart")
+        public StrategyChartSeriesDto chart(
+            @PathVariable("id") String strategyId,
+            @RequestParam(value = "limit", defaultValue = "120") int limit
+        ) {
+        int boundedLimit = Math.max(10, Math.min(limit, 500));
+        StrategyConfigEntity strategy = strategyConfigRepository.findById(java.util.UUID.fromString(strategyId))
+            .orElseThrow(() -> new IllegalArgumentException("Strategy not found: " + strategyId));
+
+        BigDecimal referencePrice = positionRepository.findBySymbol(strategy.getSymbol())
+            .map(PositionEntity::getAveragePrice)
+            .orElse(BigDecimal.ZERO);
+
+        BigDecimal buyTrigger = trigger(referencePrice, strategy.getBuyDropPercent(), true);
+        BigDecimal sellTrigger = trigger(referencePrice, strategy.getSellRisePercent(), false);
+
+        List<MarketSnapshotEntity> snapshots = marketSnapshotRepository.findBySymbolOrderByCapturedAtDesc(
+            strategy.getSymbol(),
+            PageRequest.of(0, boundedLimit)
+        );
+
+        List<StrategyChartPointDto> points = snapshots.stream()
+            .map(s -> new StrategyChartPointDto(s.getCapturedAt(), s.getPrice(), buyTrigger, sellTrigger))
+            .toList();
+
+        return new StrategyChartSeriesDto(
+            strategy.getId().toString(),
+            strategy.getSymbol(),
+            referencePrice,
+            strategy.getBuyDropPercent(),
+            strategy.getSellRisePercent(),
+            points
+        );
+        }
+
+        private BigDecimal trigger(BigDecimal referencePrice, BigDecimal percent, boolean isBuy) {
+        if (referencePrice == null || percent == null || referencePrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal factor = isBuy
+            ? BigDecimal.ONE.subtract(percent.movePointLeft(2))
+            : BigDecimal.ONE.add(percent.movePointLeft(2));
+        return referencePrice.multiply(factor).setScale(6, RoundingMode.HALF_UP);
+        }
 
     private StrategyExecutionDto toDto(StrategyExecutionEntity execution) {
         return new StrategyExecutionDto(

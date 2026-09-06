@@ -86,6 +86,157 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MarketSnapshotDto'
+  /api/strategies:
+    get:
+      summary: List strategy configurations
+      responses:
+        '200':
+          description: Strategy list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyConfigDto'
+    post:
+      summary: Create strategy configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StrategyConfigRequestDto'
+      responses:
+        '200':
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyConfigDto'
+  /api/strategies/{id}:
+    put:
+      summary: Update strategy configuration
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StrategyConfigRequestDto'
+      responses:
+        '200':
+          description: Strategy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyConfigDto'
+    delete:
+      summary: Delete strategy configuration
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Strategy deleted
+  /api/strategies/{id}/pause:
+    post:
+      summary: Pause strategy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Strategy paused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyConfigDto'
+  /api/strategies/{id}/resume:
+    post:
+      summary: Resume strategy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Strategy resumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyConfigDto'
+  /api/strategies/activity:
+    get:
+      summary: Strategy automation activity feed
+      parameters:
+        - in: query
+          name: symbol
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Strategy activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyExecutionDto'
+  /api/strategies/{id}/executions:
+    get:
+      summary: Strategy executions by strategy id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Execution history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyExecutionDto'
+  /api/strategies/{id}/chart:
+    get:
+      summary: Chart data for price and trigger lines
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 500
+      responses:
+        '200':
+          description: Strategy chart series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyChartSeriesDto'
 components:
   schemas:
     PlaceOrderRequestDto:
@@ -166,3 +317,118 @@ components:
         capturedAt:
           type: string
           format: date-time
+    StrategyConfigRequestDto:
+      type: object
+      required:
+        - symbol
+        - buyDropPercent
+        - sellRisePercent
+        - buyCashPercent
+        - sellPositionPercent
+        - maxOrdersPerDay
+        - cooldownMinutes
+        - active
+        - simulatorEnabled
+        - alpacaEnabled
+      properties:
+        symbol:
+          type: string
+        buyDropPercent:
+          type: number
+        sellRisePercent:
+          type: number
+        buyCashPercent:
+          type: number
+        sellPositionPercent:
+          type: number
+        maxOrdersPerDay:
+          type: integer
+        cooldownMinutes:
+          type: integer
+        active:
+          type: boolean
+        simulatorEnabled:
+          type: boolean
+        alpacaEnabled:
+          type: boolean
+    StrategyConfigDto:
+      type: object
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        buyDropPercent:
+          type: number
+        sellRisePercent:
+          type: number
+        buyCashPercent:
+          type: number
+        sellPositionPercent:
+          type: number
+        maxOrdersPerDay:
+          type: integer
+        cooldownMinutes:
+          type: integer
+        active:
+          type: boolean
+        simulatorEnabled:
+          type: boolean
+        alpacaEnabled:
+          type: boolean
+        lastActionAt:
+          type: string
+          format: date-time
+    StrategyExecutionDto:
+      type: object
+      properties:
+        id:
+          type: string
+        strategyConfigId:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+        triggerPrice:
+          type: number
+        referencePrice:
+          type: number
+        orderId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+        executedAt:
+          type: string
+          format: date-time
+    StrategyChartPointDto:
+      type: object
+      properties:
+        capturedAt:
+          type: string
+          format: date-time
+        price:
+          type: number
+        buyTriggerPrice:
+          type: number
+        sellTriggerPrice:
+          type: number
+    StrategyChartSeriesDto:
+      type: object
+      properties:
+        strategyId:
+          type: string
+        symbol:
+          type: string
+        referencePrice:
+          type: number
+        buyDropPercent:
+          type: number
+        sellRisePercent:
+          type: number
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyChartPointDto'

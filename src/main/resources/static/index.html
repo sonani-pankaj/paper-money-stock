@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PaperStock Strategy Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="bg-glow bg-glow-a"></div>
+<div class="bg-glow bg-glow-b"></div>
+
+<header class="header shell">
+    <div>
+        <h1>PaperStock Automation</h1>
+        <p>Configure per-stock triggers and monitor automated buys and sells.</p>
+    </div>
+    <button id="refreshAllBtn" class="btn primary">Refresh</button>
+</header>
+
+<main class="shell grid">
+    <section class="panel">
+        <h2>Strategy Config</h2>
+        <form id="strategyForm" class="form-grid">
+            <input type="hidden" id="strategyId" />
+
+            <label>Symbol
+                <input id="symbol" required placeholder="AAPL" maxlength="10" />
+            </label>
+
+            <label>Buy on Drop %
+                <input id="buyDropPercent" type="number" step="0.01" min="0.01" max="100" value="5" required />
+            </label>
+
+            <label>Sell on Rise %
+                <input id="sellRisePercent" type="number" step="0.01" min="0.01" max="100" value="10" required />
+            </label>
+
+            <label>Buy Cash %
+                <input id="buyCashPercent" type="number" step="0.01" min="0.01" max="100" value="10" required />
+            </label>
+
+            <label>Sell Position %
+                <input id="sellPositionPercent" type="number" step="0.01" min="0.01" max="100" value="25" required />
+            </label>
+
+            <label>Max Orders/Day
+                <input id="maxOrdersPerDay" type="number" min="1" value="2" required />
+            </label>
+
+            <label>Cooldown Minutes
+                <input id="cooldownMinutes" type="number" min="0" value="30" required />
+            </label>
+
+            <label class="check-wrap"><input id="active" type="checkbox" checked /> Active</label>
+            <label class="check-wrap"><input id="simulatorEnabled" type="checkbox" checked /> Simulator</label>
+            <label class="check-wrap"><input id="alpacaEnabled" type="checkbox" checked /> Alpaca</label>
+
+            <div class="form-actions">
+                <button type="submit" class="btn primary">Save Strategy</button>
+                <button type="button" id="clearFormBtn" class="btn">Clear</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>Account Snapshot</h2>
+        <div class="metric-row">
+            <div class="metric">
+                <span>Mode</span>
+                <strong id="accountMode">-</strong>
+            </div>
+            <div class="metric">
+                <span>Cash</span>
+                <strong id="accountCash">-</strong>
+            </div>
+            <div class="metric">
+                <span>Equity</span>
+                <strong id="accountEquity">-</strong>
+            </div>
+        </div>
+        <p class="hint">P&L values in holdings are derived from latest market snapshots.</p>
+    </section>
+
+    <section class="panel col-2">
+        <h2>Strategies</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Buy%</th>
+                    <th>Sell%</th>
+                    <th>Status</th>
+                    <th>Modes</th>
+                    <th>Action</th>
+                </tr>
+                </thead>
+                <tbody id="strategyTableBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel col-2">
+        <h2>Holdings and P&L</h2>
+        <label class="inline-field">Search Holdings
+            <input id="holdingsFilter" placeholder="Filter by symbol, qty, or P&L" />
+        </label>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Qty</th>
+                    <th>Avg Price</th>
+                    <th>Last Price</th>
+                    <th>Unrealized P&L</th>
+                </tr>
+                </thead>
+                <tbody id="holdingsBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel col-2">
+        <h2>Price vs Trigger Lines</h2>
+        <label class="inline-field">Selected Strategy
+            <select id="chartStrategySelect"></select>
+        </label>
+        <canvas id="strategyChart" height="120"></canvas>
+    </section>
+
+    <section class="panel col-2">
+        <h2>Automation Activity</h2>
+        <label class="inline-field">Search Activity
+            <input id="activityFilter" placeholder="Filter by symbol, status, side, or message" />
+        </label>
+        <div class="table-wrap activity-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                    <th>Order</th>
+                </tr>
+                </thead>
+                <tbody id="activityBody"></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
