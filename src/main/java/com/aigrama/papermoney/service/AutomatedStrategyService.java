@@ -1,6 +1,7 @@
 package com.aigrama.papermoney.service;
 
 import com.aigrama.papermoney.dto.AccountDto;
+import com.aigrama.papermoney.dto.AiDecisionDto;
 import com.aigrama.papermoney.dto.MarketSnapshotDto;
 import com.aigrama.papermoney.dto.OrderDto;
 import com.aigrama.papermoney.dto.PlaceOrderRequestDto;
@@ -36,8 +37,10 @@ public class AutomatedStrategyService {
     private final PositionRepository positionRepository;
     private final MarketDataService marketDataService;
     private final TradingService tradingService;
+    private final AiDecisionService aiDecisionService;
     private final String mode;
     private final long maxStaleSeconds;
+    private final boolean aiEnabled;
 
     public AutomatedStrategyService(
             StrategyConfigRepository strategyConfigRepository,
@@ -45,16 +48,20 @@ public class AutomatedStrategyService {
             PositionRepository positionRepository,
             MarketDataService marketDataService,
             TradingService tradingService,
+                AiDecisionService aiDecisionService,
             @Value("${paperstock.mode:simulator}") String mode,
-            @Value("${paperstock.market-data.max-stale-seconds:120}") long maxStaleSeconds
+                @Value("${paperstock.market-data.max-stale-seconds:120}") long maxStaleSeconds,
+                @Value("${paperstock.ai.enabled:true}") boolean aiEnabled
     ) {
         this.strategyConfigRepository = strategyConfigRepository;
         this.strategyExecutionRepository = strategyExecutionRepository;
         this.positionRepository = positionRepository;
         this.marketDataService = marketDataService;
         this.tradingService = tradingService;
+        this.aiDecisionService = aiDecisionService;
         this.mode = mode;
         this.maxStaleSeconds = maxStaleSeconds;
+        this.aiEnabled = aiEnabled;
     }
 
     public void evaluateAllActive() {
@@ -116,12 +123,42 @@ public class AutomatedStrategyService {
             return;
         }
 
+        BigDecimal buyDropPercent = strategy.getBuyDropPercent();
+        BigDecimal sellRisePercent = strategy.getSellRisePercent();
+        boolean allowBuy = true;
+        boolean allowSell = true;
+
+        if (aiEnabled) {
+            AiDecisionDto decision = aiDecisionService.evaluate(
+                strategy.getSymbol(),
+                strategy.getBuyDropPercent(),
+                strategy.getSellRisePercent(),
+                currentPrice
+            );
+            buyDropPercent = decision.dynamicBuyDropPercent();
+            sellRisePercent = decision.dynamicSellRisePercent();
+            allowBuy = decision.allowBuy();
+            allowSell = decision.allowSell();
+        }
+
         BigDecimal buyTriggerPrice = referencePrice
-                .multiply(BigDecimal.ONE.subtract(strategy.getBuyDropPercent().movePointLeft(2)))
+            .multiply(BigDecimal.ONE.subtract(buyDropPercent.movePointLeft(2)))
                 .setScale(6, RoundingMode.HALF_UP);
         BigDecimal sellTriggerPrice = referencePrice
-                .multiply(BigDecimal.ONE.add(strategy.getSellRisePercent().movePointLeft(2)))
+            .multiply(BigDecimal.ONE.add(sellRisePercent.movePointLeft(2)))
                 .setScale(6, RoundingMode.HALF_UP);
+
+        if (!allowBuy && currentPrice.compareTo(buyTriggerPrice) <= 0) {
+            record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED,
+                "AI gate blocked BUY signal");
+            return;
+        }
+
+        if (!allowSell && currentPrice.compareTo(sellTriggerPrice) >= 0) {
+            record(strategy, OrderSide.SELL, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED,
+                "AI gate blocked SELL signal");
+            return;
+        }
 
         if (currentPrice.compareTo(buyTriggerPrice) <= 0) {
             executeBuy(strategy, currentPrice, referencePrice);

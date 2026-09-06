@@ -276,6 +276,85 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StrategyTradeReportDto'
+  /api/ai/sentiment/signals:
+    post:
+      summary: Ingest one news/social sentiment signal for a symbol
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentimentSignalRequestDto'
+      responses:
+        '200':
+          description: Updated sentiment score summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentimentScoreDto'
+  /api/ai/sentiment/{symbol}:
+    get:
+      summary: Get current aggregated sentiment score by symbol
+      parameters:
+        - in: path
+          name: symbol
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Symbol sentiment summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentimentScoreDto'
+  /api/ai/decision:
+    get:
+      summary: Preview AI decision features for a symbol at current price
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: buyDropPercent
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: sellRisePercent
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: currentPrice
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: AI decision output
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiDecisionDto'
+  /api/ai/backtest:
+    post:
+      summary: Compare AI-enabled vs rule-only strategy performance on stored snapshots
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestRequestDto'
+      responses:
+        '200':
+          description: Backtest comparison result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestComparisonDto'
   /api/strategies/{id}/executions:
     get:
       summary: Strategy executions by strategy id
@@ -512,6 +591,99 @@ components:
         sellTrades:
           type: integer
           format: int64
+    SentimentSignalRequestDto:
+      type: object
+      required: [symbol, source, content]
+      properties:
+        symbol:
+          type: string
+        source:
+          type: string
+          description: e.g. news, social
+        content:
+          type: string
+    SentimentScoreDto:
+      type: object
+      properties:
+        symbol:
+          type: string
+        score:
+          type: number
+        sampleSize:
+          type: integer
+          format: int32
+    AiDecisionDto:
+      type: object
+      properties:
+        sentimentScore:
+          type: number
+        volatilityPct:
+          type: number
+        dynamicBuyDropPercent:
+          type: number
+        dynamicSellRisePercent:
+          type: number
+        buyProbability:
+          type: number
+        sellProbability:
+          type: number
+        allowBuy:
+          type: boolean
+        allowSell:
+          type: boolean
+    BacktestRequestDto:
+      type: object
+      required:
+        - symbol
+        - initialCash
+        - buyDropPercent
+        - sellRisePercent
+        - buyCashPercent
+        - sellPositionPercent
+      properties:
+        symbol:
+          type: string
+        initialCash:
+          type: number
+        buyDropPercent:
+          type: number
+        sellRisePercent:
+          type: number
+        buyCashPercent:
+          type: number
+        sellPositionPercent:
+          type: number
+        maxPoints:
+          type: integer
+          format: int32
+    BacktestResultDto:
+      type: object
+      properties:
+        mode:
+          type: string
+        buyTrades:
+          type: integer
+          format: int32
+        sellTrades:
+          type: integer
+          format: int32
+        endingCash:
+          type: number
+        endingQty:
+          type: number
+        endingValue:
+          type: number
+        pnl:
+          type: number
+    BacktestComparisonDto:
+      type: object
+      properties:
+        symbol:
+          type: string
+        aiEnabled:
+          $ref: '#/components/schemas/BacktestResultDto'
+        ruleOnly:
+          $ref: '#/components/schemas/BacktestResultDto'
     StrategyChartPointDto:
       type: object
       properties:

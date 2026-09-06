@@ -6,7 +6,8 @@ const state = {
     activityRows: [],
     holdingsRows: [],
     stockSearchRows: [],
-    strategyReportRows: []
+    strategyReportRows: [],
+    aiSentimentRows: []
 };
 
 async function api(url, options) {
@@ -66,6 +67,13 @@ function toMoney(value) {
 
 function toNum(value) {
     return Number(value || 0).toFixed(4);
+}
+
+function toPct(value) {
+    if (value == null) {
+        return "-";
+    }
+    return `${(Number(value) * 100).toFixed(2)}%`;
 }
 
 function escapeHtml(text) {
@@ -341,6 +349,138 @@ async function searchStocks() {
 async function loadStrategies() {
     state.strategies = await api("/api/strategies");
     renderStrategies();
+    renderAiSymbolSelect();
+}
+
+function renderAiSymbolSelect() {
+    const select = $("aiSymbolSelect");
+    if (!select) {
+        return;
+    }
+    const prev = select.value;
+    select.innerHTML = "";
+    state.strategies.forEach((s) => {
+        const option = document.createElement("option");
+        option.value = s.symbol;
+        option.textContent = s.symbol;
+        select.appendChild(option);
+    });
+    if (prev && state.strategies.some((s) => s.symbol === prev)) {
+        select.value = prev;
+    }
+}
+
+async function loadAiSentimentByStrategy() {
+    const rows = [];
+    for (const strategy of state.strategies) {
+        try {
+            const score = await api(`/api/ai/sentiment/${encodeURIComponent(strategy.symbol)}`);
+            rows.push(score);
+        } catch (error) {
+            rows.push({ symbol: strategy.symbol, score: null, sampleSize: 0 });
+        }
+    }
+    state.aiSentimentRows = rows;
+    renderAiSentiment();
+}
+
+function renderAiSentiment() {
+    const body = $("aiSentimentBody");
+    body.innerHTML = "";
+    for (const row of state.aiSentimentRows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="mono">${escapeHtml(row.symbol)}</td>
+            <td>${row.score == null ? "-" : Number(row.score).toFixed(4)}</td>
+            <td>${Number(row.sampleSize || 0)}</td>
+        `;
+        body.appendChild(tr);
+    }
+}
+
+async function refreshAiDecision() {
+    const symbol = $("aiSymbolSelect").value;
+    if (!symbol) {
+        $("aiCurrentPrice").textContent = "-";
+        $("aiBuyProb").textContent = "-";
+        $("aiSellProb").textContent = "-";
+        $("aiDynamicBuy").textContent = "-";
+        $("aiDynamicSell").textContent = "-";
+        $("aiGate").textContent = "-";
+        return;
+    }
+
+    const strategy = state.strategies.find((s) => s.symbol === symbol);
+    if (!strategy) {
+        return;
+    }
+
+    const market = await api(`/api/market/latest?symbol=${encodeURIComponent(symbol)}&refresh=true`);
+    const currentPrice = Number(market.price);
+    const decision = await api(
+        `/api/ai/decision?symbol=${encodeURIComponent(symbol)}&buyDropPercent=${strategy.buyDropPercent}&sellRisePercent=${strategy.sellRisePercent}&currentPrice=${currentPrice}`
+    );
+
+    $("aiCurrentPrice").textContent = toMoney(currentPrice);
+    $("aiBuyProb").textContent = toPct(decision.buyProbability);
+    $("aiSellProb").textContent = toPct(decision.sellProbability);
+    $("aiDynamicBuy").textContent = `${Number(decision.dynamicBuyDropPercent).toFixed(2)}%`;
+    $("aiDynamicSell").textContent = `${Number(decision.dynamicSellRisePercent).toFixed(2)}%`;
+    $("aiGate").textContent = `${decision.allowBuy ? "BUY yes" : "BUY no"} / ${decision.allowSell ? "SELL yes" : "SELL no"}`;
+}
+
+async function runBacktest(event) {
+    event.preventDefault();
+    const symbol = $("aiSymbolSelect").value;
+    const strategy = state.strategies.find((s) => s.symbol === symbol);
+    if (!strategy) {
+        showToast("Select a strategy symbol first.", "error");
+        return;
+    }
+
+    const payload = {
+        symbol,
+        initialCash: Number($("backtestInitialCash").value),
+        buyDropPercent: Number(strategy.buyDropPercent),
+        sellRisePercent: Number(strategy.sellRisePercent),
+        buyCashPercent: Number(strategy.buyCashPercent),
+        sellPositionPercent: Number(strategy.sellPositionPercent),
+        maxPoints: Number($("backtestMaxPoints").value)
+    };
+
+    const result = await api("/api/ai/backtest", {
+        method: "POST",
+        body: JSON.stringify(payload)
+    });
+    renderBacktest(result);
+    showToast(`Backtest completed for ${symbol}.`);
+}
+
+function renderBacktest(data) {
+    const body = $("backtestBody");
+    body.innerHTML = "";
+    if (!data || !data.aiEnabled || !data.ruleOnly) {
+        return;
+    }
+
+    const rows = [
+        ["Buy Trades", data.aiEnabled.buyTrades, data.ruleOnly.buyTrades],
+        ["Sell Trades", data.aiEnabled.sellTrades, data.ruleOnly.sellTrades],
+        ["Ending Cash", toMoney(data.aiEnabled.endingCash), toMoney(data.ruleOnly.endingCash)],
+        ["Ending Qty", toNum(data.aiEnabled.endingQty), toNum(data.ruleOnly.endingQty)],
+        ["Ending Value", toMoney(data.aiEnabled.endingValue), toMoney(data.ruleOnly.endingValue)],
+        ["PnL", toMoney(data.aiEnabled.pnl), toMoney(data.ruleOnly.pnl)]
+    ];
+
+    rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${row[0]}</td>
+            <td class="mono">${row[1]}</td>
+            <td class="mono">${row[2]}</td>
+        `;
+        body.appendChild(tr);
+    });
 }
 
 async function loadActivity() {
@@ -594,31 +734,69 @@ async function loadChart(strategyId) {
 
 async function refreshAll() {
     await Promise.all([loadStrategies(), loadActivity(), loadStrategyReport(), loadAccount(), loadMarketConfig()]);
+    await loadAiSentimentByStrategy();
+    await refreshAiDecision();
     await loadHoldings();
 }
 
-$("strategyForm").addEventListener("submit", saveStrategy);
-$("stockSearchForm").addEventListener("submit", (e) => {
+async function onRefreshAllClick() {
+    const btn = $("refreshAllBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Refreshing...";
+    }
+    try {
+        await refreshAll();
+        showToast("Dashboard refreshed.");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Refresh";
+        }
+    }
+}
+
+function bind(id, event, handler) {
+    const el = $(id);
+    if (!el) {
+        console.warn(`Missing element #${id} for ${event} binding`);
+        return;
+    }
+    el.addEventListener(event, handler);
+}
+
+bind("strategyForm", "submit", saveStrategy);
+bind("stockSearchForm", "submit", (e) => {
     e.preventDefault();
     searchStocks().catch(showError);
 });
-$("manualHoldingForm").addEventListener("submit", (e) => {
+bind("manualHoldingForm", "submit", (e) => {
     saveManualHolding(e).catch(showError);
 });
-$("strategyTableBody").addEventListener("click", (e) => {
+bind("aiDecisionForm", "submit", (e) => {
+    e.preventDefault();
+    refreshAiDecision().catch(showError);
+});
+bind("aiSymbolSelect", "change", () => {
+    refreshAiDecision().catch(showError);
+});
+bind("backtestForm", "submit", (e) => {
+    runBacktest(e).catch(showError);
+});
+bind("strategyTableBody", "click", (e) => {
     onStrategyTableClick(e).catch(showError);
 });
-$("holdingsBody").addEventListener("click", (e) => {
+bind("holdingsBody", "click", (e) => {
     onHoldingsTableClick(e).catch(showError);
 });
-$("clearFormBtn").addEventListener("click", clearForm);
-$("refreshAllBtn").addEventListener("click", () => refreshAll().catch(showError));
-$("chartStrategySelect").addEventListener("change", (e) => {
+bind("clearFormBtn", "click", clearForm);
+bind("refreshAllBtn", "click", () => onRefreshAllClick().catch(showError));
+bind("chartStrategySelect", "change", (e) => {
     loadChart(e.target.value).catch(showError);
 });
-$("activityFilter").addEventListener("input", renderActivity);
-$("holdingsFilter").addEventListener("input", renderHoldings);
-$("stockSearchQuery").addEventListener("keydown", (e) => {
+bind("activityFilter", "input", renderActivity);
+bind("holdingsFilter", "input", renderHoldings);
+bind("stockSearchQuery", "keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
         searchStocks().catch(showError);

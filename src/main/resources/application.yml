@@ -53,6 +53,15 @@ paperstock:
   strategy:
     enabled: true
     eval-ms: 30000
+  ai:
+    enabled: ${PAPERSTOCK_AI_ENABLED:true}
+    sentiment:
+      lookback-hours: ${PAPERSTOCK_AI_SENTIMENT_LOOKBACK_HOURS:24}
+    volatility:
+      window: ${PAPERSTOCK_AI_VOLATILITY_WINDOW:30}
+      factor: ${PAPERSTOCK_AI_VOLATILITY_FACTOR:2.0}
+    probability:
+      threshold: ${PAPERSTOCK_AI_PROBABILITY_THRESHOLD:0.55}
 
 resilience4j:
   retry:

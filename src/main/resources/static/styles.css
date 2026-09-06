@@ -91,6 +91,12 @@ h2 {
     font-size: 1.1rem;
 }
 
+h3 {
+    margin: 0 0 10px;
+    font-size: 0.98rem;
+    color: #dbe8ff;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -313,6 +319,41 @@ th {
     height: 40px;
 }
 
+.ai-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.ai-form {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+}
+
+.ai-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.backtest-box {
+    margin-top: 8px;
+    border-top: 1px solid #243549;
+    padding-top: 12px;
+}
+
+.backtest-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+}
+
 .inline-actions {
     display: flex;
     gap: 6px;
@@ -424,6 +465,20 @@ th {
     }
 
     .holding-form {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .ai-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-form {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .backtest-form {
         grid-template-columns: 1fr;
         align-items: stretch;
     }
