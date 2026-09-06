@@ -23,6 +23,59 @@
 </header>
 
 <main class="shell grid">
+    <section class="panel col-2">
+        <h2>Account Snapshot</h2>
+        <div class="metric-row">
+            <div class="metric">
+                <span>Mode</span>
+                <strong id="accountMode">-</strong>
+            </div>
+            <div class="metric">
+                <span>Cash</span>
+                <strong id="accountCash">-</strong>
+            </div>
+            <div class="metric">
+                <span>Equity</span>
+                <strong id="accountEquity">-</strong>
+            </div>
+        </div>
+        <p class="hint">Quotes: <span id="marketProvider" class="mono">-</span> provider, stale after <span id="marketMaxStale" class="mono">-</span>s.</p>
+        <p class="hint">P&L values in holdings are derived from latest market snapshots.</p>
+    </section>
+
+    <section class="panel">
+        <h2>Stock Search and Add Holdings</h2>
+        <form id="stockSearchForm" class="search-layout">
+            <label>Search Stock
+                <div class="search-row">
+                    <input id="stockSearchQuery" placeholder="Type symbol or company name" />
+                    <button type="submit" id="stockSearchBtn" class="btn">Find</button>
+                </div>
+            </label>
+        </form>
+
+        <div class="search-results standalone">
+            <div class="search-results-head">
+                <strong>Results</strong>
+                <span class="hint hint-inline">Fill Strategy copies symbol to strategy config.</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Name</th>
+                        <th>Exchange</th>
+                        <th>Live Price</th>
+                        <th>Action</th>
+                    </tr>
+                    </thead>
+                    <tbody id="stockSearchBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
     <section class="panel">
         <h2>Strategy Config</h2>
         <form id="strategyForm" class="form-grid">
@@ -67,25 +120,6 @@
         </form>
     </section>
 
-    <section class="panel">
-        <h2>Account Snapshot</h2>
-        <div class="metric-row">
-            <div class="metric">
-                <span>Mode</span>
-                <strong id="accountMode">-</strong>
-            </div>
-            <div class="metric">
-                <span>Cash</span>
-                <strong id="accountCash">-</strong>
-            </div>
-            <div class="metric">
-                <span>Equity</span>
-                <strong id="accountEquity">-</strong>
-            </div>
-        </div>
-        <p class="hint">P&L values in holdings are derived from latest market snapshots.</p>
-    </section>
-
     <section class="panel col-2">
         <h2>Strategies</h2>
         <div class="table-wrap">
@@ -106,7 +140,41 @@
     </section>
 
     <section class="panel col-2">
+        <h2>Strategy Buy/Sell Report</h2>
+        <p class="hint">Totals from successful strategy executions, grouped by stock symbol.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Buy Qty</th>
+                    <th>Buy Amount</th>
+                    <th>Buy Trades</th>
+                    <th>Sell Qty</th>
+                    <th>Sell Amount</th>
+                    <th>Sell Trades</th>
+                </tr>
+                </thead>
+                <tbody id="strategyReportBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel col-2">
         <h2>Holdings and P&L</h2>
+        <p class="hint">Manage each row: edit values, delete holding, or add symbol to strategy config.</p>
+        <form id="manualHoldingForm" class="holding-form">
+            <label>Symbol
+                <input id="holdingSymbol" placeholder="AAPL" maxlength="12" required />
+            </label>
+            <label>Qty
+                <input id="holdingQty" type="number" min="0.000001" step="0.000001" value="1" required />
+            </label>
+            <label>Buy Price
+                <input id="holdingBuyPrice" type="number" min="0.000001" step="0.000001" placeholder="180.25" required />
+            </label>
+            <button type="submit" class="btn">Add/Update Holding</button>
+        </form>
         <label class="inline-field">Search Holdings
             <input id="holdingsFilter" placeholder="Filter by symbol, qty, or P&L" />
         </label>
@@ -116,9 +184,10 @@
                 <tr>
                     <th>Symbol</th>
                     <th>Qty</th>
-                    <th>Avg Price</th>
-                    <th>Last Price</th>
+                    <th>Buy Price</th>
+                    <th>Current Live Price</th>
                     <th>Unrealized P&L</th>
+                    <th>Action</th>
                 </tr>
                 </thead>
                 <tbody id="holdingsBody"></tbody>
@@ -131,6 +200,10 @@
         <label class="inline-field">Selected Strategy
             <select id="chartStrategySelect"></select>
         </label>
+        <div class="chart-meta-row">
+            <p id="chartMeta" class="hint">No quote metadata yet.</p>
+            <span id="chartFreshnessBadge" class="tag">unknown</span>
+        </div>
         <canvas id="strategyChart" height="120"></canvas>
     </section>
 
@@ -156,6 +229,8 @@
         </div>
     </section>
 </main>
+
+<div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 
 <script src="/app.js"></script>
 </body>

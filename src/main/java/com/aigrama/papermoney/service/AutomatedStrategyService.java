@@ -1,6 +1,7 @@
 package com.aigrama.papermoney.service;
 
 import com.aigrama.papermoney.dto.AccountDto;
+import com.aigrama.papermoney.dto.MarketSnapshotDto;
 import com.aigrama.papermoney.dto.OrderDto;
 import com.aigrama.papermoney.dto.PlaceOrderRequestDto;
 import com.aigrama.papermoney.entity.OrderSide;
@@ -20,6 +21,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +37,7 @@ public class AutomatedStrategyService {
     private final MarketDataService marketDataService;
     private final TradingService tradingService;
     private final String mode;
+    private final long maxStaleSeconds;
 
     public AutomatedStrategyService(
             StrategyConfigRepository strategyConfigRepository,
@@ -42,7 +45,8 @@ public class AutomatedStrategyService {
             PositionRepository positionRepository,
             MarketDataService marketDataService,
             TradingService tradingService,
-            @Value("${paperstock.mode:simulator}") String mode
+            @Value("${paperstock.mode:simulator}") String mode,
+            @Value("${paperstock.market-data.max-stale-seconds:120}") long maxStaleSeconds
     ) {
         this.strategyConfigRepository = strategyConfigRepository;
         this.strategyExecutionRepository = strategyExecutionRepository;
@@ -50,6 +54,7 @@ public class AutomatedStrategyService {
         this.marketDataService = marketDataService;
         this.tradingService = tradingService;
         this.mode = mode;
+        this.maxStaleSeconds = maxStaleSeconds;
     }
 
     public void evaluateAllActive() {
@@ -89,11 +94,25 @@ public class AutomatedStrategyService {
         }
 
         BigDecimal referencePrice = position.getAveragePrice();
-        BigDecimal currentPrice = marketDataService.getLatestPrice(strategy.getSymbol())
-                .block(Duration.ofSeconds(6));
+        MarketSnapshotDto latestSnapshot = marketDataService.refreshAndStore(strategy.getSymbol())
+            .block(Duration.ofSeconds(8));
+
+        BigDecimal currentPrice = latestSnapshot == null ? null : latestSnapshot.price();
 
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
             record(strategy, OrderSide.BUY, null, referencePrice, null, StrategyExecutionStatus.SKIPPED, "No current market price");
+            return;
+        }
+
+        if (latestSnapshot == null || latestSnapshot.capturedAt() == null) {
+            record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Missing quote timestamp");
+            return;
+        }
+
+        long ageSeconds = ChronoUnit.SECONDS.between(latestSnapshot.capturedAt(), LocalDateTime.now());
+        if (ageSeconds > maxStaleSeconds) {
+            record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED,
+                "Stale quote skipped: " + ageSeconds + "s old");
             return;
         }
 

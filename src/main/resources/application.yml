@@ -39,7 +39,16 @@ paperstock:
     api-key: ${ALPACA_API_KEY:}
     api-secret: ${ALPACA_API_SECRET:}
   market-data:
+    provider: ${MARKET_DATA_PROVIDER:yahoo}
     base-url: ${MARKET_DATA_BASE_URL:https://api.exchangerate.host}
+    max-stale-seconds: ${MARKET_DATA_MAX_STALE_SECONDS:120}
+    yahoo:
+      quote-base-url: ${YAHOO_QUOTE_BASE_URL:https://query1.finance.yahoo.com}
+      chart-base-url: ${YAHOO_CHART_BASE_URL:https://query2.finance.yahoo.com}
+      search-base-url: ${YAHOO_SEARCH_BASE_URL:https://query2.finance.yahoo.com}
+    twelvedata:
+      base-url: ${TWELVEDATA_BASE_URL:https://api.twelvedata.com}
+      api-key: ${TWELVEDATA_API_KEY:demo}
     poll-ms: 30000
   strategy:
     enabled: true

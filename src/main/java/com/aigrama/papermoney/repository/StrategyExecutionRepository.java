@@ -25,5 +25,7 @@ public interface StrategyExecutionRepository extends JpaRepository<StrategyExecu
 
     List<StrategyExecutionEntity> findTop200ByStrategyConfigIdOrderByExecutedAtDesc(UUID strategyConfigId);
 
+    List<StrategyExecutionEntity> findByStatus(StrategyExecutionStatus status);
+
     void deleteByStrategyConfigId(UUID strategyConfigId);
 }

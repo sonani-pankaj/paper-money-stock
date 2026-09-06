@@ -1,6 +1,7 @@
 package com.aigrama.papermoney.controller;
 
 import com.aigrama.papermoney.dto.AccountDto;
+import com.aigrama.papermoney.dto.ManualHoldingRequestDto;
 import com.aigrama.papermoney.dto.OrderDto;
 import com.aigrama.papermoney.dto.PlaceOrderRequestDto;
 import com.aigrama.papermoney.dto.PositionDto;
@@ -52,6 +53,17 @@ public class TradingController {
     @GetMapping("/trade/positions")
     public Flux<PositionDto> getPositions() {
         return tradingService.getPositions();
+    }
+
+    @PostMapping("/trade/positions")
+    public Mono<PositionDto> upsertManualHolding(@Valid @RequestBody ManualHoldingRequestDto request) {
+        return tradingService.upsertManualHolding(request);
+    }
+
+    @DeleteMapping("/trade/positions/{symbol}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> deleteManualHolding(@PathVariable("symbol") String symbol) {
+        return tradingService.deleteManualHolding(symbol);
     }
 
     @GetMapping("/account")
