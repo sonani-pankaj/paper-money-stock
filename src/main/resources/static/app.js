@@ -295,8 +295,25 @@ async function saveStrategy(event) {
 function renderStrategies() {
     const body = $("strategyTableBody");
     const select = $("chartStrategySelect");
+    const emptyState = $("strategiesEmpty");
+    const tableWrap = $("strategiesTableWrap");
+    const badge = $("strategiesBadge");
     body.innerHTML = "";
     select.innerHTML = "";
+
+    // Update badge
+    const activeCount = state.strategies.filter((s) => s.active).length;
+    if (badge) {
+        if (state.strategies.length === 0) {
+            badge.textContent = "none";
+        } else {
+            badge.textContent = `${state.strategies.length} total · ${activeCount} active`;
+        }
+    }
+
+    // Show/hide empty state
+    if (emptyState) emptyState.hidden = state.strategies.length > 0;
+    if (tableWrap) tableWrap.hidden = state.strategies.length === 0;
 
     state.strategies.forEach((s) => {
         const tr = document.createElement("tr");
@@ -315,9 +332,11 @@ function renderStrategies() {
             <td><span class="tag ${statusClass}">${s.active ? "active" : "paused"}</span></td>
             <td>${s.simulatorEnabled ? "sim" : ""}${s.alpacaEnabled ? " alpaca" : ""}</td>
             <td>
-                <button type="button" data-id="${s.id}" data-action="edit" class="btn">Edit</button>
-                <button type="button" data-id="${s.id}" data-action="toggle" class="btn">${s.active ? "Pause" : "Resume"}</button>
-                <button type="button" data-id="${s.id}" data-action="delete" class="btn">Delete</button>
+                <div class="inline-actions">
+                    <button type="button" data-id="${s.id}" data-action="edit" class="btn compact">Edit</button>
+                    <button type="button" data-id="${s.id}" data-action="toggle" class="btn compact">${s.active ? "Pause" : "Resume"}</button>
+                    <button type="button" data-id="${s.id}" data-action="delete" class="btn compact">Delete</button>
+                </div>
             </td>
         `;
         body.appendChild(tr);
@@ -691,6 +710,28 @@ async function loadHoldings() {
         $("accountEquity").textContent = toMoney(totalEquity);
     }
 
+    // Update portfolio group badge
+    const portfolioBadge = $("portfolioBadge");
+    if (portfolioBadge) {
+        portfolioBadge.textContent = `${state.holdingsRows.length} holding${state.holdingsRows.length !== 1 ? "s" : ""} · ${toMoney(totalEquity)} equity`;
+    }
+
+    // Update holdings card badge
+    const holdingsBadge = $("holdingsBadge");
+    if (holdingsBadge) {
+        holdingsBadge.textContent = `${state.holdingsRows.length} position${state.holdingsRows.length !== 1 ? "s" : ""}`;
+    }
+
+    // Auto-expand portfolio group if there are holdings
+    if (state.holdingsRows.length > 0) {
+        const toggle = $("portfolioToggle");
+        const body = $("portfolioBody");
+        if (toggle && body && toggle.getAttribute("aria-expanded") === "false") {
+            toggle.setAttribute("aria-expanded", "true");
+            body.hidden = false;
+        }
+    }
+
     renderHoldings();
 }
 
@@ -717,6 +758,11 @@ async function saveManualHolding(event) {
         if ($("accountModeSelect") && $("holdingMode")) {
             $("holdingMode").value = $("accountModeSelect").value || "simulator";
         }
+        // Close the add-holding form
+        const addWrap = $("addHoldingFormWrap");
+        const addBtn = $("toggleAddHoldingBtn");
+        if (addWrap) addWrap.hidden = true;
+        if (addBtn) addBtn.textContent = "+ Add Holding";
         await loadHoldings();
     } catch (error) {
         showError(error);
@@ -911,7 +957,6 @@ bind("strategyTableBody", "click", (e) => {
 bind("holdingsBody", "click", (e) => {
     onHoldingsTableClick(e).catch(showError);
 });
-bind("clearFormBtn", "click", clearForm);
 bind("openSearchModalBtn", "click", openSearchModal);
 bind("closeSearchModalBtn", "click", closeSearchModal);
 bind("closeStrategyModalBtn", "click", closeStrategyModal);
@@ -938,6 +983,42 @@ bind("accountCashInput", "keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
         saveAccountCash().catch(showError);
+    }
+});
+
+// + New Strategy button (always visible in Strategies header)
+bind("newStrategyBtn", "click", () => {
+    clearForm();
+    openStrategyModal();
+});
+
+// Collapsible section toggles
+function wireToggle(toggleId, bodyId) {
+    const toggle = $(toggleId);
+    const body = $(bodyId);
+    if (!toggle || !body) return;
+    toggle.addEventListener("click", () => {
+        const expanded = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", String(!expanded));
+        body.hidden = expanded;
+    });
+}
+
+wireToggle("portfolioToggle", "portfolioBody");
+wireToggle("analyticsToggle", "analyticsBody");
+wireToggle("reportToggle", "reportBody");
+
+// + Add Holding toggle
+bind("toggleAddHoldingBtn", "click", () => {
+    const wrap = $("addHoldingFormWrap");
+    const btn = $("toggleAddHoldingBtn");
+    if (!wrap) return;
+    const isHidden = wrap.hidden;
+    wrap.hidden = !isHidden;
+    if (btn) btn.textContent = isHidden ? "✕ Cancel" : "+ Add Holding";
+    if (isHidden) {
+        const firstInput = wrap.querySelector("input");
+        if (firstInput) firstInput.focus();
     }
 });
 

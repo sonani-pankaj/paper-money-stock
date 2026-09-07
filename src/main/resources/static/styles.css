@@ -15,34 +15,66 @@
     box-sizing: border-box;
 }
 
-body {
-    margin: 0;
-    font-family: "Space Grotesk", sans-serif;
-    color: var(--ink);
-    background: radial-gradient(circle at 10% -10%, #233146 0%, var(--bg) 50%);
+/* Ensure CSS display rules never override the native hidden attribute */
+[hidden] {
+    display: none !important;
 }
 
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Space Grotesk", sans-serif;
+    color: var(--ink);
+    /* Layered mesh: base dark + radial colour pockets */
+    background:
+        radial-gradient(ellipse 80% 60% at 15% 0%,   rgba(30, 90, 180, 0.30) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 100%,  rgba(14, 90, 120, 0.28) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 55% 50%,  rgba(80, 30, 140, 0.12) 0%, transparent 60%),
+        linear-gradient(170deg, #0a1628 0%, #0c1220 40%, #081018 100%);
+    /* Subtle dot grid overlay via SVG data URI */
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Ccircle cx='1' cy='1' r='1' fill='rgba(120,170,255,0.07)'/%3E%3C/svg%3E"),
+        radial-gradient(ellipse 80% 60% at 15% 0%,   rgba(30, 90, 180, 0.30) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 100%,  rgba(14, 90, 120, 0.28) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 55% 50%,  rgba(80, 30, 140, 0.12) 0%, transparent 60%),
+        linear-gradient(170deg, #0a1628 0%, #0c1220 40%, #081018 100%);
+}
+
+/* Ambient glow orbs */
 .bg-glow {
     position: fixed;
-    width: 460px;
-    height: 460px;
     border-radius: 999px;
-    filter: blur(60px);
-    opacity: 0.35;
+    filter: blur(80px);
     z-index: -1;
+    pointer-events: none;
+    animation: glow-drift 14s ease-in-out infinite alternate;
 }
 
 .bg-glow-a {
-    top: -120px;
-    left: -140px;
-    background: #1f7ec8;
+    width: 640px;
+    height: 500px;
+    top: -180px;
+    left: -180px;
+    background: radial-gradient(circle, rgba(42, 120, 220, 0.55) 0%, transparent 70%);
+    animation-duration: 16s;
 }
 
 .bg-glow-b {
-    right: -120px;
-    bottom: -160px;
-    background: #0e4f65;
+    width: 560px;
+    height: 480px;
+    right: -160px;
+    bottom: -140px;
+    background: radial-gradient(circle, rgba(14, 100, 140, 0.50) 0%, transparent 70%);
+    animation-duration: 20s;
+    animation-direction: alternate-reverse;
 }
+
+@keyframes glow-drift {
+    0%   { transform: translate(0px, 0px) scale(1); }
+    50%  { transform: translate(30px, -20px) scale(1.06); }
+    100% { transform: translate(-20px, 30px) scale(0.97); }
+}
+
 
 .shell {
     width: min(1200px, 92vw);
@@ -73,13 +105,17 @@ body {
     gap: 10px;
 }
 
-.grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    padding-bottom: 22px;
+/* ─── Page layout: single column stack ─── */
+.page-layout {
+    width: min(1200px, 92vw);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 32px;
 }
 
+/* ─── Panel ─── */
 .panel {
     background: var(--panel);
     border: 1px solid var(--line);
@@ -88,10 +124,239 @@ body {
     box-shadow: 0 14px 36px rgba(6, 10, 18, 0.45);
 }
 
-.col-2 {
-    grid-column: span 2;
+.panel-inset {
+    background: rgba(18, 26, 36, 0.6);
+    border-color: #1e3048;
+    box-shadow: none;
+    margin-top: 0;
 }
 
+/* ─── Panel header ─── */
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 10px;
+}
+
+.panel-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-header h2 {
+    margin: 0;
+}
+
+/* ─── Account bar (compact horizontal strip) ─── */
+.account-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    background: rgba(18, 31, 43, 0.5);
+    border: 1px dashed #365171;
+    border-radius: 14px;
+    padding: 10px 16px;
+}
+
+.account-bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 16px;
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.account-bar-item:first-child {
+    padding-left: 0;
+}
+
+.account-bar-meta {
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.account-bar-divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--line);
+    margin: 4px 0;
+    flex-shrink: 0;
+}
+
+.account-equity-val {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 1.05rem;
+    color: var(--good);
+}
+
+/* ─── Section group (collapsible) ─── */
+.section-group {
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    box-shadow: 0 14px 36px rgba(6, 10, 18, 0.45);
+}
+
+.section-group-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.18s ease;
+    letter-spacing: -0.01em;
+}
+
+.section-group-toggle:hover {
+    background: rgba(42, 166, 255, 0.06);
+}
+
+.section-group-toggle[aria-expanded="true"] {
+    border-bottom: 1px solid var(--line);
+}
+
+.section-group-icon {
+    font-size: 1.1rem;
+}
+
+.section-group-title {
+    flex: 1;
+}
+
+.section-group-chevron {
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    transition: transform 0.22s ease;
+    display: inline-block;
+}
+
+.section-group-toggle[aria-expanded="true"] .section-group-chevron {
+    transform: rotate(90deg);
+}
+
+.section-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+}
+
+/* ─── Sub-toggle (for report inside portfolio) ─── */
+.sub-toggle-wrap {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #1e3048;
+    background: rgba(14, 22, 32, 0.4);
+}
+
+.sub-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sub-toggle:hover {
+    color: var(--ink);
+    background: rgba(42, 166, 255, 0.05);
+}
+
+.sub-toggle[aria-expanded="true"] {
+    color: var(--ink);
+    border-bottom: 1px solid #1e3048;
+}
+
+.sub-toggle-chevron {
+    font-size: 0.65rem;
+    transition: transform 0.2s ease;
+    display: inline-block;
+}
+
+.sub-toggle[aria-expanded="true"] .sub-toggle-chevron {
+    transform: rotate(90deg);
+}
+
+/* ─── Empty state ─── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 16px;
+    color: var(--ink-soft);
+    text-align: center;
+    gap: 6px;
+}
+
+.empty-state .empty-icon {
+    font-size: 2rem;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* ─── Collapsible form ─── */
+.collapsible-form {
+    background: rgba(14, 22, 32, 0.5);
+    border: 1px solid #1e3048;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    animation: slide-down 0.18s ease;
+}
+
+@keyframes slide-down {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Badge ─── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: rgba(42, 166, 255, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(42, 166, 255, 0.2);
+    white-space: nowrap;
+}
+
+/* ─── Typography ─── */
 h2 {
     margin: 0 0 12px;
     font-size: 1.1rem;
@@ -103,6 +368,7 @@ h3 {
     color: #dbe8ff;
 }
 
+/* ─── Forms ─── */
 .form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -191,6 +457,7 @@ select:focus {
     color: #b7cae4;
 }
 
+/* ─── Buttons ─── */
 .btn {
     border-radius: 10px;
     border: 1px solid #355474;
@@ -198,6 +465,7 @@ select:focus {
     cursor: pointer;
     background: #1a2938;
     color: #d9e7ff;
+    transition: filter 0.15s ease;
 }
 
 .btn.primary {
@@ -210,6 +478,12 @@ select:focus {
     filter: brightness(1.08);
 }
 
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.84rem;
+}
+
+/* ─── Account controls ─── */
 .metric-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -296,6 +570,7 @@ select:focus {
     background: #0369a1;
 }
 
+/* ─── Hints ─── */
 .hint {
     margin: 10px 0 0;
     color: var(--ink-soft);
@@ -305,8 +580,10 @@ select:focus {
 .hint-inline {
     margin: 0;
     font-size: 0.78rem;
+    color: var(--ink-soft);
 }
 
+/* ─── Chart ─── */
 .chart-meta-row {
     display: flex;
     justify-content: space-between;
@@ -329,6 +606,7 @@ select:focus {
     color: var(--warn);
 }
 
+/* ─── Tables ─── */
 .table-wrap {
     overflow-x: auto;
 }
@@ -380,7 +658,6 @@ th {
     grid-template-columns: 1fr 1.2fr 1fr 1fr auto;
     gap: 10px;
     align-items: end;
-    margin-bottom: 12px;
 }
 
 .holding-form .btn {
@@ -399,6 +676,7 @@ th {
     border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
+/* ─── AI section ─── */
 .ai-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -434,6 +712,7 @@ th {
     margin-bottom: 10px;
 }
 
+/* ─── Inline actions ─── */
 .inline-actions {
     display: flex;
     gap: 6px;
@@ -445,6 +724,7 @@ th {
     font-size: 0.82rem;
 }
 
+/* ─── Activity ─── */
 .activity-wrap {
     max-height: 330px;
 }
@@ -455,10 +735,12 @@ th {
     background: #142131;
 }
 
+/* ─── Mono ─── */
 .mono {
     font-family: "IBM Plex Mono", monospace;
 }
 
+/* ─── Toasts ─── */
 .toast-host {
     position: fixed;
     right: 18px;
@@ -497,13 +779,21 @@ th {
     }
 }
 
+/* ─── Responsive ─── */
 @media (max-width: 860px) {
-    .grid {
-        grid-template-columns: 1fr;
+    .account-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
     }
 
-    .col-2 {
-        grid-column: span 1;
+    .account-bar-divider {
+        display: none;
+    }
+
+    .account-bar-item {
+        padding: 0;
+        width: 100%;
     }
 
     .form-grid {
@@ -569,6 +859,7 @@ th {
     }
 }
 
+/* ─── Modals ─── */
 .modal-backdrop {
     position: fixed;
     top: 0;
@@ -627,17 +918,7 @@ th {
     background: rgba(255, 255, 255, 0.1);
 }
 
-.panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-}
-
-.panel-header h2 {
-    margin: 0;
-}
-
+/* ─── Help button ─── */
 .help-btn {
     width: 26px;
     height: 26px;
@@ -653,6 +934,7 @@ th {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .help-btn:hover {
@@ -662,6 +944,7 @@ th {
     transform: scale(1.08);
 }
 
+/* ─── Help modal body ─── */
 .help-modal-body {
     line-height: 1.6;
     font-size: 0.92rem;

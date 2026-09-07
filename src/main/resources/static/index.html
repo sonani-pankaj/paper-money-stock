@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PaperStock Strategy Dashboard</title>
+    <meta name="description" content="Configure per-stock automated buy/sell triggers and monitor your paper trading portfolio in real time." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -25,14 +26,20 @@
     </div>
 </header>
 
-<main class="shell grid">
-    <section class="panel col-2">
+<main class="shell page-layout">
+
+    <!-- ══════════════════════════════════════════════
+         GROUP 1 — OVERVIEW (always visible)
+    ══════════════════════════════════════════════ -->
+
+    <!-- Account Snapshot (compact, always visible) -->
+    <section class="panel" id="accountSection">
         <div class="panel-header">
             <h2>Account Snapshot</h2>
             <button type="button" class="help-btn" data-help="account" title="Card Info">?</button>
         </div>
-        <div class="metric-row">
-            <div class="metric">
+        <div class="account-bar">
+            <div class="account-bar-item">
                 <label for="accountModeSelect" class="metric-label">Mode</label>
                 <select id="accountModeSelect" class="account-select">
                     <option value="simulator">Simulator (Paper)</option>
@@ -44,79 +51,44 @@
                     <option value="robinhood">Robinhood</option>
                 </select>
             </div>
-            <div class="metric">
-                <label for="accountCashInput" class="metric-label">Cash</label>
+            <div class="account-bar-divider"></div>
+            <div class="account-bar-item">
+                <span class="metric-label">Cash</span>
                 <div class="cash-input-group">
                     <span class="currency-symbol">$</span>
                     <input type="number" id="accountCashInput" class="account-cash-input" step="100" min="0" placeholder="100000" />
                     <button type="button" id="saveCashBtn" class="btn-save-cash" title="Save Cash Amount">Save</button>
                 </div>
             </div>
-            <div class="metric">
+            <div class="account-bar-divider"></div>
+            <div class="account-bar-item">
                 <span class="metric-label">Holdings Equity</span>
-                <strong id="accountEquity">-</strong>
+                <strong id="accountEquity" class="account-equity-val">-</strong>
+            </div>
+            <div class="account-bar-divider"></div>
+            <div class="account-bar-item account-bar-meta">
+                <span class="hint-inline">Quotes: <span id="marketProvider" class="mono">-</span> · stale after <span id="marketMaxStale" class="mono">-</span>s</span>
             </div>
         </div>
-        <p class="hint">Quotes: <span id="marketProvider" class="mono">-</span> provider, stale after <span id="marketMaxStale" class="mono">-</span>s.</p>
-        <p class="hint">P&L values in holdings are derived from latest market snapshots.</p>
     </section>
 
-    <section class="panel col-2">
+    <!-- Strategies (primary action surface, always visible) -->
+    <section class="panel" id="strategiesSection">
         <div class="panel-header">
-            <h2>Holdings and P&L</h2>
-            <button type="button" class="help-btn" data-help="holdings" title="Card Info">?</button>
+            <div class="panel-header-left">
+                <h2>Strategies</h2>
+                <span class="badge" id="strategiesBadge"></span>
+            </div>
+            <div class="panel-header-right">
+                <button type="button" id="newStrategyBtn" class="btn primary btn-sm">+ New Strategy</button>
+                <button type="button" class="help-btn" data-help="strategies" title="Card Info">?</button>
+            </div>
         </div>
-        <p class="hint">Manage each row: edit values, delete holding, or add symbol to strategy config.</p>
-        <form id="manualHoldingForm" class="holding-form">
-            <label>Symbol
-                <input id="holdingSymbol" placeholder="AAPL" maxlength="12" required />
-            </label>
-            <label>Mode
-                <select id="holdingMode" class="account-select">
-                    <option value="simulator">Simulator (Paper)</option>
-                    <option value="alpaca">Alpaca Brokerage</option>
-                    <option value="interactive_brokers">Interactive Brokers</option>
-                    <option value="td_ameritrade">TD Ameritrade / Schwab</option>
-                    <option value="webull">Webull</option>
-                    <option value="e_trade">E*TRADE</option>
-                    <option value="robinhood">Robinhood</option>
-                </select>
-            </label>
-            <label>Qty
-                <input id="holdingQty" type="number" min="0.000001" step="0.000001" value="1" required />
-            </label>
-            <label>Buy Price
-                <input id="holdingBuyPrice" type="number" min="0.000001" step="0.000001" placeholder="180.25" required />
-            </label>
-            <button type="submit" class="btn">Add/Update Holding</button>
-        </form>
-        <label class="inline-field">Search Holdings
-            <input id="holdingsFilter" placeholder="Filter by symbol, mode, qty, or P&L" />
-        </label>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Mode</th>
-                    <th>Qty</th>
-                    <th>Buy Price</th>
-                    <th>Current Live Price</th>
-                    <th>Unrealized P&L</th>
-                    <th>Action</th>
-                </tr>
-                </thead>
-                <tbody id="holdingsBody"></tbody>
-            </table>
+        <div class="empty-state" id="strategiesEmpty">
+            <span class="empty-icon">📈</span>
+            <p>No strategies yet. Click <strong>+ New Strategy</strong> or search for a stock to get started.</p>
         </div>
-    </section>
-
-    <section class="panel col-2">
-        <div class="panel-header">
-            <h2>Strategies</h2>
-            <button type="button" class="help-btn" data-help="strategies" title="Card Info">?</button>
-        </div>
-        <div class="table-wrap">
+        <div class="table-wrap" id="strategiesTableWrap">
             <table>
                 <thead>
                 <tr>
@@ -135,142 +107,249 @@
         </div>
     </section>
 
-    <section class="panel col-2">
-        <div class="panel-header">
-            <h2>Strategy Buy/Sell Report</h2>
-            <button type="button" class="help-btn" data-help="report" title="Card Info">?</button>
-        </div>
-        <p class="hint">Totals from successful strategy executions, grouped by stock symbol.</p>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Buy Qty</th>
-                    <th>Buy Amount</th>
-                    <th>Buy Trades</th>
-                    <th>Sell Qty</th>
-                    <th>Sell Amount</th>
-                    <th>Sell Trades</th>
-                </tr>
-                </thead>
-                <tbody id="strategyReportBody"></tbody>
-            </table>
-        </div>
-    </section>
+    <!-- ══════════════════════════════════════════════
+         GROUP 2 — PORTFOLIO (collapsible)
+    ══════════════════════════════════════════════ -->
+    <div class="section-group" id="portfolioGroup">
+        <button type="button" class="section-group-toggle" id="portfolioToggle" aria-expanded="false" aria-controls="portfolioBody">
+            <span class="section-group-icon">📁</span>
+            <span class="section-group-title">Portfolio</span>
+            <span class="badge" id="portfolioBadge">0 holdings</span>
+            <span class="section-group-chevron">▶</span>
+        </button>
+        <div class="section-group-body" id="portfolioBody" hidden>
 
-    <section class="panel col-2">
-        <div class="panel-header">
-            <h2>AI Insights and Backtest</h2>
-            <button type="button" class="help-btn" data-help="ai" title="Card Info">?</button>
-        </div>
-        <div class="ai-grid">
-            <div>
-                <h3>Current Sentiment by Strategy Symbol</h3>
+            <!-- Holdings & P&L -->
+            <section class="panel">
+                <div class="panel-header">
+                    <div class="panel-header-left">
+                        <h2>Holdings &amp; P&amp;L</h2>
+                        <span class="badge" id="holdingsBadge"></span>
+                    </div>
+                    <div class="panel-header-right">
+                        <button type="button" id="toggleAddHoldingBtn" class="btn btn-sm">+ Add Holding</button>
+                        <button type="button" class="help-btn" data-help="holdings" title="Card Info">?</button>
+                    </div>
+                </div>
+
+                <!-- Add Holding form — hidden by default -->
+                <div id="addHoldingFormWrap" class="collapsible-form" hidden>
+                    <p class="hint" style="margin-top:0; margin-bottom:10px;">Add a new position or update an existing one.</p>
+                    <form id="manualHoldingForm" class="holding-form">
+                        <label>Symbol
+                            <input id="holdingSymbol" placeholder="AAPL" maxlength="12" required />
+                        </label>
+                        <label>Mode
+                            <select id="holdingMode" class="account-select">
+                                <option value="simulator">Simulator (Paper)</option>
+                                <option value="alpaca">Alpaca Brokerage</option>
+                                <option value="interactive_brokers">Interactive Brokers</option>
+                                <option value="td_ameritrade">TD Ameritrade / Schwab</option>
+                                <option value="webull">Webull</option>
+                                <option value="e_trade">E*TRADE</option>
+                                <option value="robinhood">Robinhood</option>
+                            </select>
+                        </label>
+                        <label>Qty
+                            <input id="holdingQty" type="number" min="0.000001" step="0.000001" value="1" required />
+                        </label>
+                        <label>Buy Price
+                            <input id="holdingBuyPrice" type="number" min="0.000001" step="0.000001" placeholder="180.25" required />
+                        </label>
+                        <button type="submit" class="btn">Save Holding</button>
+                    </form>
+                </div>
+
+                <label class="inline-field">Search Holdings
+                    <input id="holdingsFilter" placeholder="Filter by symbol, mode, qty, or P&amp;L" />
+                </label>
                 <div class="table-wrap">
                     <table>
                         <thead>
                         <tr>
                             <th>Symbol</th>
-                            <th>Sentiment Score</th>
-                            <th>Samples</th>
+                            <th>Mode</th>
+                            <th>Qty</th>
+                            <th>Buy Price</th>
+                            <th>Current Live Price</th>
+                            <th>Unrealized P&amp;L</th>
+                            <th>Action</th>
                         </tr>
                         </thead>
-                        <tbody id="aiSentimentBody"></tbody>
+                        <tbody id="holdingsBody"></tbody>
                     </table>
                 </div>
-            </div>
+            </section>
 
-            <div>
-                <h3>Live AI Decision</h3>
-                <form id="aiDecisionForm" class="ai-form">
-                    <label>Strategy Symbol
-                        <select id="aiSymbolSelect"></select>
-                    </label>
-                    <button type="submit" class="btn">Refresh Decision</button>
-                </form>
-                <div class="ai-metrics">
-                    <div class="metric"><span>Current Price</span><strong id="aiCurrentPrice">-</strong></div>
-                    <div class="metric"><span>Buy Probability</span><strong id="aiBuyProb">-</strong></div>
-                    <div class="metric"><span>Sell Probability</span><strong id="aiSellProb">-</strong></div>
-                    <div class="metric"><span>Dynamic Buy Drop %</span><strong id="aiDynamicBuy">-</strong></div>
-                    <div class="metric"><span>Dynamic Sell Rise %</span><strong id="aiDynamicSell">-</strong></div>
-                    <div class="metric"><span>Signal Gate</span><strong id="aiGate">-</strong></div>
+            <!-- Strategy Report (collapsed sub-section inside portfolio) -->
+            <div class="sub-toggle-wrap">
+                <button type="button" class="sub-toggle" id="reportToggle" aria-expanded="false" aria-controls="reportBody">
+                    <span>📊 Strategy Buy/Sell Report</span>
+                    <span class="sub-toggle-chevron">▶</span>
+                </button>
+                <div id="reportBody" hidden>
+                    <section class="panel panel-inset">
+                        <div class="panel-header">
+                            <h2>Strategy Buy/Sell Report</h2>
+                            <button type="button" class="help-btn" data-help="report" title="Card Info">?</button>
+                        </div>
+                        <p class="hint">Totals from successful strategy executions, grouped by stock symbol.</p>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Buy Qty</th>
+                                    <th>Buy Amount</th>
+                                    <th>Buy Trades</th>
+                                    <th>Sell Qty</th>
+                                    <th>Sell Amount</th>
+                                    <th>Sell Trades</th>
+                                </tr>
+                                </thead>
+                                <tbody id="strategyReportBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
             </div>
-        </div>
 
-        <div class="backtest-box">
-            <h3>One-Click Backtest (AI vs Rule-Only)</h3>
-            <form id="backtestForm" class="backtest-form">
-                <label>Initial Cash
-                    <input id="backtestInitialCash" type="number" step="0.01" min="0.01" value="10000" required />
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         GROUP 3 — ANALYTICS (collapsible)
+    ══════════════════════════════════════════════ -->
+    <div class="section-group" id="analyticsGroup">
+        <button type="button" class="section-group-toggle" id="analyticsToggle" aria-expanded="false" aria-controls="analyticsBody">
+            <span class="section-group-icon">🤖</span>
+            <span class="section-group-title">Analytics</span>
+            <span class="badge" id="analyticsBadge">AI · Chart · Activity</span>
+            <span class="section-group-chevron">▶</span>
+        </button>
+        <div class="section-group-body" id="analyticsBody" hidden>
+
+            <!-- AI Insights -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>AI Insights &amp; Backtest</h2>
+                    <button type="button" class="help-btn" data-help="ai" title="Card Info">?</button>
+                </div>
+                <div class="ai-grid">
+                    <div>
+                        <h3>Current Sentiment by Strategy Symbol</h3>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Sentiment Score</th>
+                                    <th>Samples</th>
+                                </tr>
+                                </thead>
+                                <tbody id="aiSentimentBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3>Live AI Decision</h3>
+                        <form id="aiDecisionForm" class="ai-form">
+                            <label>Strategy Symbol
+                                <select id="aiSymbolSelect"></select>
+                            </label>
+                            <button type="submit" class="btn">Refresh Decision</button>
+                        </form>
+                        <div class="ai-metrics">
+                            <div class="metric"><span>Current Price</span><strong id="aiCurrentPrice">-</strong></div>
+                            <div class="metric"><span>Buy Probability</span><strong id="aiBuyProb">-</strong></div>
+                            <div class="metric"><span>Sell Probability</span><strong id="aiSellProb">-</strong></div>
+                            <div class="metric"><span>Dynamic Buy Drop %</span><strong id="aiDynamicBuy">-</strong></div>
+                            <div class="metric"><span>Dynamic Sell Rise %</span><strong id="aiDynamicSell">-</strong></div>
+                            <div class="metric"><span>Signal Gate</span><strong id="aiGate">-</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="backtest-box">
+                    <h3>One-Click Backtest (AI vs Rule-Only)</h3>
+                    <form id="backtestForm" class="backtest-form">
+                        <label>Initial Cash
+                            <input id="backtestInitialCash" type="number" step="0.01" min="0.01" value="10000" required />
+                        </label>
+                        <label>Max Points
+                            <input id="backtestMaxPoints" type="number" min="80" max="2000" value="500" required />
+                        </label>
+                        <button type="submit" class="btn primary">Run Backtest</button>
+                    </form>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>AI Enabled</th>
+                                <th>Rule Only</th>
+                            </tr>
+                            </thead>
+                            <tbody id="backtestBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Price Chart -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Price vs Trigger Lines</h2>
+                    <button type="button" class="help-btn" data-help="chart" title="Card Info">?</button>
+                </div>
+                <label class="inline-field">Selected Strategy
+                    <select id="chartStrategySelect"></select>
                 </label>
-                <label>Max Points
-                    <input id="backtestMaxPoints" type="number" min="80" max="2000" value="500" required />
+                <div class="chart-meta-row">
+                    <p id="chartMeta" class="hint">No quote metadata yet.</p>
+                    <span id="chartFreshnessBadge" class="tag">unknown</span>
+                </div>
+                <canvas id="strategyChart" height="120"></canvas>
+            </section>
+
+            <!-- Automation Activity -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Automation Activity</h2>
+                    <button type="button" class="help-btn" data-help="activity" title="Card Info">?</button>
+                </div>
+                <label class="inline-field">Search Activity
+                    <input id="activityFilter" placeholder="Filter by symbol, status, side, or message" />
                 </label>
-                <button type="submit" class="btn primary">Run Backtest</button>
-            </form>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Metric</th>
-                        <th>AI Enabled</th>
-                        <th>Rule Only</th>
-                    </tr>
-                    </thead>
-                    <tbody id="backtestBody"></tbody>
-                </table>
-            </div>
-        </div>
-    </section>
+                <div class="table-wrap activity-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Symbol</th>
+                            <th>Side</th>
+                            <th>Status</th>
+                            <th>Message</th>
+                            <th>Order</th>
+                        </tr>
+                        </thead>
+                        <tbody id="activityBody"></tbody>
+                    </table>
+                </div>
+            </section>
 
-    <section class="panel col-2">
-        <div class="panel-header">
-            <h2>Price vs Trigger Lines</h2>
-            <button type="button" class="help-btn" data-help="chart" title="Card Info">?</button>
         </div>
-        <label class="inline-field">Selected Strategy
-            <select id="chartStrategySelect"></select>
-        </label>
-        <div class="chart-meta-row">
-            <p id="chartMeta" class="hint">No quote metadata yet.</p>
-            <span id="chartFreshnessBadge" class="tag">unknown</span>
-        </div>
-        <canvas id="strategyChart" height="120"></canvas>
-    </section>
+    </div>
 
-    <section class="panel col-2">
-        <div class="panel-header">
-            <h2>Automation Activity</h2>
-            <button type="button" class="help-btn" data-help="activity" title="Card Info">?</button>
-        </div>
-        <label class="inline-field">Search Activity
-            <input id="activityFilter" placeholder="Filter by symbol, status, side, or message" />
-        </label>
-        <div class="table-wrap activity-wrap">
-            <table>
-                <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Symbol</th>
-                    <th>Side</th>
-                    <th>Status</th>
-                    <th>Message</th>
-                    <th>Order</th>
-                </tr>
-                </thead>
-                <tbody id="activityBody"></tbody>
-            </table>
-        </div>
-    </section>
 </main>
+
+<!-- ══════ MODALS ══════ -->
 
 <div id="stockSearchModal" class="modal-backdrop hidden">
     <div class="modal-content panel">
         <div class="modal-header">
-            <h3>Stock Search & Live Quotes</h3>
+            <h3>Stock Search &amp; Live Quotes</h3>
             <button type="button" id="closeSearchModalBtn" class="btn-close">&times;</button>
         </div>
         <form id="stockSearchForm" class="search-layout">
