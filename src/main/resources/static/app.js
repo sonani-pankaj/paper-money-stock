@@ -548,7 +548,7 @@ async function loadActivity() {
 }
 
 async function loadStrategyReport() {
-    state.strategyReportRows = await api("/api/strategies/report");
+    state.strategyReportRows = await api("/api/strategies/trade-history");
     renderStrategyReport();
 }
 
@@ -556,17 +556,28 @@ function renderStrategyReport() {
     const body = $("strategyReportBody");
     body.innerHTML = "";
 
+    if (!state.strategyReportRows || state.strategyReportRows.length === 0) {
+        body.innerHTML = `<tr><td colspan="7" class="hint" style="text-align:center;padding:16px;">No trades yet — strategies will appear here after the first BUY or SELL executes.</td></tr>`;
+        return;
+    }
+
     for (const row of state.strategyReportRows) {
+        const isBuy  = (row.side || "").toUpperCase() === "BUY";
+        const typeBadge = isBuy
+            ? `<span class="tag good" style="min-width:40px;text-align:center;">BUY</span>`
+            : `<span class="tag warn" style="min-width:40px;text-align:center;">SELL</span>`;
+        const timeStr = row.executedAt
+            ? new Date(row.executedAt).toLocaleString([], {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})
+            : "-";
         const tr = document.createElement("tr");
         tr.innerHTML = `
+            <td class="mono" style="white-space:nowrap;">${timeStr}</td>
             <td class="mono">${escapeHtml(row.symbol)}</td>
+            <td>${typeBadge}</td>
             <td><span class="mode-tag">${escapeHtml(formatBrokerLabel(row.broker || "simulator"))}</span></td>
-            <td>${toNum(row.buyQty)}</td>
-            <td>${toMoney(row.buyAmount)}</td>
-            <td>${Number(row.buyTrades || 0)}</td>
-            <td>${toNum(row.sellQty)}</td>
-            <td>${toMoney(row.sellAmount)}</td>
-            <td>${Number(row.sellTrades || 0)}</td>
+            <td class="mono">${toMoney(row.price)}</td>
+            <td class="mono">${toNum(row.qty)}</td>
+            <td class="mono">${toMoney(row.amount)}</td>
         `;
         body.appendChild(tr);
     }

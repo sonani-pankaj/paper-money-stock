@@ -183,6 +183,54 @@ public class StrategyController {
                 .toList();
     }
 
+    /**
+     * Individual trade history: one row per executed BUY or SELL, newest first.
+     * Joins strategy_executions (SUCCESS only) with their filled trade to get qty/amount.
+     */
+    @GetMapping("/trade-history")
+    public List<com.aigrama.papermoney.dto.StrategyExecutionLogDto> tradeHistory() {
+        List<StrategyExecutionEntity> executions = strategyExecutionRepository.findByStatus(StrategyExecutionStatus.SUCCESS);
+
+        // Build orderId → execution map for quick lookup
+        Map<String, StrategyExecutionEntity> orderIdToExecution = new LinkedHashMap<>();
+        ArrayList<UUID> orderIds = new ArrayList<>();
+        for (StrategyExecutionEntity ex : executions) {
+            if (ex.getOrderId() == null || ex.getOrderId().isBlank()) continue;
+            try {
+                UUID orderId = UUID.fromString(ex.getOrderId());
+                orderIds.add(orderId);
+                orderIdToExecution.put(ex.getOrderId(), ex);
+            } catch (IllegalArgumentException ignored) { /* non-UUID broker order IDs */ }
+        }
+
+        List<TradeEntity> trades = orderIds.isEmpty() ? List.of() : tradeRepository.findAllByOrder_IdIn(orderIds);
+
+        // One row per trade (which is one fill per order in the Simulator)
+        List<com.aigrama.papermoney.dto.StrategyExecutionLogDto> rows = new ArrayList<>();
+        for (TradeEntity trade : trades) {
+            StrategyExecutionEntity ex = orderIdToExecution.get(trade.getOrder().getId().toString());
+            if (ex == null) continue;
+            BigDecimal qty    = trade.getQty();
+            BigDecimal price  = trade.getPrice();
+            BigDecimal amount = qty.multiply(price).setScale(2, RoundingMode.HALF_UP);
+            String side = trade.getOrder().getSide() == OrderSide.SELL ? "SELL" : "BUY";
+            rows.add(new com.aigrama.papermoney.dto.StrategyExecutionLogDto(
+                    ex.getId().toString(),
+                    ex.getExecutedAt(),
+                    trade.getSymbol(),
+                    side,
+                    ex.getBroker() != null ? ex.getBroker() : "simulator",
+                    price,
+                    qty,
+                    amount
+            ));
+        }
+
+        // Sort newest first
+        rows.sort((a, b) -> b.executedAt().compareTo(a.executedAt()));
+        return rows;
+    }
+
     @GetMapping("/{id}/chart")
     public StrategyChartSeriesDto chart(
             @PathVariable("id") String strategyId,

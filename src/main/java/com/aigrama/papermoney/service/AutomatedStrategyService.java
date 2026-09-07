@@ -90,16 +90,7 @@ public class AutomatedStrategyService {
             return;
         }
 
-        if (isCooldownActive(strategy)) {
-            record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED, "Cooldown active");
-            return;
-        }
-
-        long todayCount = successCountToday(strategy.getId());
-        if (todayCount >= strategy.getMaxOrdersPerDay()) {
-            record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED, "Daily limit reached");
-            return;
-        }
+        // Cooldown and daily limit only guard BUY (checked below). SELL is never blocked.
 
         PositionEntity position = positionRepository.findBySymbol(strategy.getSymbol())
                 .orElse(null);
@@ -209,11 +200,32 @@ public class AutomatedStrategyService {
         }
 
         if (currentPrice.compareTo(buyTriggerPrice) <= 0) {
+            // Side-aware cooldown: only blocks BUY→BUY repeats (not BUY after a SELL).
+            if (isSideCooldownActive(strategy, "BUY")) {
+                log.info("[{}] SKIP BUY — same-side cooldown active (last: {} at {})",
+                        strategy.getSymbol(), strategy.getLastActionSide(), strategy.getLastActionAt());
+                record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Cooldown active");
+                return;
+            }
+            long todayBuys = successCountToday(strategy.getId());
+            if (todayBuys >= strategy.getMaxOrdersPerDay()) {
+                log.info("[{}] SKIP BUY — daily limit reached ({}/{})", strategy.getSymbol(), todayBuys, strategy.getMaxOrdersPerDay());
+                record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Daily limit reached");
+                return;
+            }
             executeBuy(strategy, currentPrice, referencePrice);
             return;
         }
 
+        // SELL: side-aware cooldown blocks SELL→SELL repeats (stops infinite re-sell of partial positions).
+        // BUY→SELL transition is always allowed instantly.
         if (currentPrice.compareTo(sellTriggerPrice) >= 0) {
+            if (isSideCooldownActive(strategy, "SELL")) {
+                log.info("[{}] SKIP SELL — same-side cooldown active (last SELL: {})", strategy.getSymbol(), strategy.getLastActionAt());
+                record(strategy, OrderSide.SELL, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Sell cooldown active");
+                return;
+            }
+            log.info("[{}] SELL trigger met (current={} >= sell={})", strategy.getSymbol(), currentPrice, sellTriggerPrice);
             executeSell(strategy, position, currentPrice, referencePrice);
             return;
         }
@@ -249,7 +261,7 @@ public class AutomatedStrategyService {
         );
 
         OrderDto order = tradingService.placeOrder(request).block(Duration.ofSeconds(8));
-        touchStrategyAction(strategy);
+        touchStrategyAction(strategy, "BUY");
         record(strategy, OrderSide.BUY, order == null ? null : order.id(), currentPrice, referencePrice, StrategyExecutionStatus.SUCCESS, "BUY executed");
     }
 
@@ -281,7 +293,7 @@ public class AutomatedStrategyService {
         );
 
         OrderDto order = tradingService.placeOrder(request).block(Duration.ofSeconds(8));
-        touchStrategyAction(strategy);
+        touchStrategyAction(strategy, "SELL");
         record(strategy, OrderSide.SELL, order == null ? null : order.id(), currentPrice, referencePrice, StrategyExecutionStatus.SUCCESS, "SELL executed");
     }
 
@@ -297,6 +309,19 @@ public class AutomatedStrategyService {
         return strategy.getLastActionAt().plusMinutes(strategy.getCooldownMinutes()).isAfter(LocalDateTime.now());
     }
 
+    /**
+     * Side-aware cooldown: only fires if the last executed action was the SAME side.
+     *   BUY -> SELL: allowed instantly (different side — profitable exit should never be blocked)
+     *   SELL -> SELL: blocked by cooldown (prevents infinite repeat sells of partial positions)
+     *   BUY -> BUY:  blocked by cooldown (prevents rapid repeat buying)
+     *   SELL -> BUY: allowed instantly (different side)
+     */
+    private boolean isSideCooldownActive(StrategyConfigEntity strategy, String intendedSide) {
+        if (!isCooldownActive(strategy)) return false;
+        String lastSide = strategy.getLastActionSide();
+        return intendedSide.equalsIgnoreCase(lastSide);
+    }
+
     private long successCountToday(UUID strategyId) {
         LocalDateTime start = LocalDate.now().atStartOfDay();
         LocalDateTime end = start.plusDays(1);
@@ -308,8 +333,9 @@ public class AutomatedStrategyService {
         );
     }
 
-    private void touchStrategyAction(StrategyConfigEntity strategy) {
+    private void touchStrategyAction(StrategyConfigEntity strategy, String side) {
         strategy.setLastActionAt(LocalDateTime.now());
+        strategy.setLastActionSide(side);
         strategy.setUpdatedAt(LocalDateTime.now());
         strategyConfigRepository.save(strategy);
     }

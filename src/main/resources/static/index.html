@@ -106,27 +106,26 @@
             </table>
         </div>
 
-        <!-- Strategy Buy/Sell Report — sub-toggle inside Strategies -->
+        <!-- Strategy Trade History — individual rows per BUY/SELL execution -->
         <div class="sub-toggle-wrap" style="margin-top: 12px;">
             <button type="button" class="sub-toggle" id="reportToggle" aria-expanded="false" aria-controls="reportBody">
-                <span>📊 Buy/Sell Report</span>
+                <span>📊 Trade History</span>
                 <span class="sub-toggle-chevron">▶</span>
             </button>
             <div id="reportBody" hidden>
                 <div class="report-inset">
-                    <p class="hint" style="margin: 0 0 10px;">Totals from successful strategy executions, grouped by stock symbol.</p>
+                    <p class="hint" style="margin: 0 0 10px;">All successful BUY and SELL executions, newest first.</p>
                     <div class="table-wrap">
                         <table>
                             <thead>
                             <tr>
+                                <th>Time</th>
                                 <th>Symbol</th>
+                                <th>Type</th>
                                 <th>Broker</th>
-                                <th>Buy Qty</th>
-                                <th>Buy Amount</th>
-                                <th>Buy Trades</th>
-                                <th>Sell Qty</th>
-                                <th>Sell Amount</th>
-                                <th>Sell Trades</th>
+                                <th>Fill Price</th>
+                                <th>Qty</th>
+                                <th>Amount</th>
                             </tr>
                             </thead>
                             <tbody id="strategyReportBody"></tbody>

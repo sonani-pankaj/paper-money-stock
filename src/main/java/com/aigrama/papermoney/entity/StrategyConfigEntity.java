@@ -54,6 +54,10 @@ public class StrategyConfigEntity {
     @Column(name = "last_action_at")
     private LocalDateTime lastActionAt;
 
+    /** Side of the last executed order: "BUY" or "SELL". Used for side-aware cooldown. */
+    @Column(name = "last_action_side", length = 10)
+    private String lastActionSide;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -154,6 +158,14 @@ public class StrategyConfigEntity {
 
     public void setLastActionAt(LocalDateTime lastActionAt) {
         this.lastActionAt = lastActionAt;
+    }
+
+    public String getLastActionSide() {
+        return lastActionSide;
+    }
+
+    public void setLastActionSide(String lastActionSide) {
+        this.lastActionSide = lastActionSide;
     }
 
     public LocalDateTime getCreatedAt() {

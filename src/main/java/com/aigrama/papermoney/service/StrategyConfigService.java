@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -55,15 +56,17 @@ public class StrategyConfigService {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
 
-        // Capture baseline price at creation time — used as stable reference
-        // when no position is held, so triggers don't float with live price changes
+        // Always force-fetch a fresh price so the strategy row shows data immediately
+        // when it appears in the UI — not waiting for the next background poll cycle.
         try {
-            MarketSnapshotDto snapshot = marketDataService.latestSnapshot(symbol).block();
+            MarketSnapshotDto snapshot = marketDataService.refreshAndStore(symbol)
+                    .onErrorResume(ex -> marketDataService.latestSnapshot(symbol))
+                    .block(Duration.ofSeconds(8));
             if (snapshot != null && snapshot.price() != null) {
                 entity.setBaselinePrice(snapshot.price());
             }
         } catch (Exception ignored) {
-            // Non-fatal: baseline price will be null and fall back to current price
+            // Non-fatal: baseline price will be null and seeded on next poll
         }
 
         return toDto(strategyConfigRepository.save(entity));
@@ -141,7 +144,9 @@ public class StrategyConfigService {
     private StrategyConfigDto toDto(StrategyConfigEntity entity) {
         BigDecimal currentPrice = null;
         try {
-            MarketSnapshotDto snapshot = marketDataService.latestSnapshot(entity.getSymbol()).block();
+            MarketSnapshotDto snapshot = marketDataService.latestSnapshot(entity.getSymbol())
+                    .switchIfEmpty(marketDataService.refreshAndStore(entity.getSymbol()))
+                    .block(Duration.ofSeconds(8));
             if (snapshot != null) {
                 currentPrice = snapshot.price();
             }
@@ -149,9 +154,21 @@ public class StrategyConfigService {
         }
 
         PositionEntity position = positionRepository.findBySymbol(entity.getSymbol()).orElse(null);
-        BigDecimal referencePrice = (position != null && position.getAveragePrice() != null && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0)
-                ? position.getAveragePrice()
-                : currentPrice;
+
+        // Mirror the evaluator's reference price priority exactly:
+        // 1) position average buy price (if holding shares)
+        // 2) entity baseline price (locked at creation from live market)
+        // 3) current live price (last resort)
+        BigDecimal referencePrice;
+        if (position != null && position.getAveragePrice() != null
+                && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0) {
+            referencePrice = position.getAveragePrice();
+        } else if (entity.getBaselinePrice() != null
+                && entity.getBaselinePrice().compareTo(BigDecimal.ZERO) > 0) {
+            referencePrice = entity.getBaselinePrice();
+        } else {
+            referencePrice = currentPrice;
+        }
 
         BigDecimal buyTriggerPrice = null;
         BigDecimal sellTriggerPrice = null;
