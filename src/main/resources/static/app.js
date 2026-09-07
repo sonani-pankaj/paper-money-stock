@@ -1132,8 +1132,10 @@ bind("resetBaselineBtn", "click", async () => {
             method: "PUT",
             body: JSON.stringify({ symbol: sym, price: latest.price })
         });
-        showToast(`✅ Baseline reset to ${toMoney(result.baselinePrice)} for ${sym}`, "success");
-        loadSimTriggerHints(sym);
+        showToast(`✅ Baseline reset to ${toMoney(result.baselinePrice)} for ${sym} — Buy/Sell targets updated`, "success");
+        // Refresh both the trigger hints AND the strategy table so Ref Price,
+        // Buy Target, and Sell Target columns update immediately (don't wait for the next poll).
+        await Promise.all([loadSimTriggerHints(sym), loadStrategies()]);
     } catch (err) {
         showError(err);
     }

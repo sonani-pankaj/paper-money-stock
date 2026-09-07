@@ -1,5 +1,6 @@
 package com.aigrama.papermoney.repository;
 
+import com.aigrama.papermoney.entity.OrderSide;
 import com.aigrama.papermoney.entity.StrategyExecutionEntity;
 import com.aigrama.papermoney.entity.StrategyExecutionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,8 +13,19 @@ import java.util.UUID;
  * Data access for strategy execution audit records.
  */
 public interface StrategyExecutionRepository extends JpaRepository<StrategyExecutionEntity, UUID> {
+
+    /** Counts ALL successful executions for a strategy in a time window (both BUY and SELL). */
     long countByStrategyConfigIdAndStatusAndExecutedAtBetween(
             UUID strategyConfigId,
+            StrategyExecutionStatus status,
+            LocalDateTime start,
+            LocalDateTime end
+    );
+
+    /** Counts only BUY (or SELL) executions for a strategy in a time window. */
+    long countByStrategyConfigIdAndSideAndStatusAndExecutedAtBetween(
+            UUID strategyConfigId,
+            OrderSide side,
             StrategyExecutionStatus status,
             LocalDateTime start,
             LocalDateTime end

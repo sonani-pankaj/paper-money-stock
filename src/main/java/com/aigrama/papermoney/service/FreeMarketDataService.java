@@ -6,6 +6,7 @@ import com.aigrama.papermoney.entity.MarketSnapshotEntity;
 import com.aigrama.papermoney.repository.MarketSnapshotRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.Cacheable;
@@ -44,6 +45,11 @@ public class FreeMarketDataService implements MarketDataService {
     private final String twelveDataBaseUrl;
     private final String twelveDataApiKey;
 
+    // Injected after construction to avoid circular dependency.
+    // When set, refreshAndStore() respects simulator price pins.
+    @Autowired(required = false)
+    private SimulatorPriceRegistry simulatorPriceRegistry;
+
     public FreeMarketDataService(
             @Qualifier("marketDataWebClient") WebClient marketDataWebClient,
             @Qualifier("alpacaWebClient") WebClient alpacaWebClient,
@@ -80,6 +86,14 @@ public class FreeMarketDataService implements MarketDataService {
 
     @Override
     public Mono<MarketSnapshotDto> refreshAndStore(String symbol) {
+        // If this symbol has a manually injected simulator price, do NOT call the real market
+        // API and do NOT overwrite the stored value. Return the pinned snapshot as-is.
+        // This closes the race condition where an in-flight async fetch (started before the pin
+        // was set) would complete AFTER the user's price injection and silently overwrite it.
+        if (simulatorPriceRegistry != null && simulatorPriceRegistry.isPinned(symbol.toUpperCase())) {
+            log.debug("[{}] refreshAndStore skipped — simulator price is pinned", symbol);
+            return latestSnapshot(symbol);
+        }
         return fetchQuote(symbol)
                 .map(quote -> {
                     MarketSnapshotEntity entity = new MarketSnapshotEntity();

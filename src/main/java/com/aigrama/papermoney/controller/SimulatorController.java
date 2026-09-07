@@ -1,8 +1,10 @@
 package com.aigrama.papermoney.controller;
 
 import com.aigrama.papermoney.entity.MarketSnapshotEntity;
+import com.aigrama.papermoney.entity.PositionEntity;
 import com.aigrama.papermoney.entity.StrategyConfigEntity;
 import com.aigrama.papermoney.repository.MarketSnapshotRepository;
+import com.aigrama.papermoney.repository.PositionRepository;
 import com.aigrama.papermoney.repository.StrategyConfigRepository;
 import com.aigrama.papermoney.service.MarketDataService;
 import com.aigrama.papermoney.service.SimulatorPriceRegistry;
@@ -34,6 +36,7 @@ public class SimulatorController {
 
     private final MarketSnapshotRepository marketSnapshotRepository;
     private final StrategyConfigRepository strategyConfigRepository;
+    private final PositionRepository positionRepository;
     private final MarketDataService marketDataService;
     private final SimulatorPriceRegistry simulatorPriceRegistry;
     private final String mode;
@@ -41,12 +44,14 @@ public class SimulatorController {
     public SimulatorController(
             MarketSnapshotRepository marketSnapshotRepository,
             StrategyConfigRepository strategyConfigRepository,
+            PositionRepository positionRepository,
             MarketDataService marketDataService,
             SimulatorPriceRegistry simulatorPriceRegistry,
             @Value("${paperstock.mode:simulator}") String mode
     ) {
         this.marketSnapshotRepository = marketSnapshotRepository;
         this.strategyConfigRepository = strategyConfigRepository;
+        this.positionRepository = positionRepository;
         this.marketDataService = marketDataService;
         this.simulatorPriceRegistry = simulatorPriceRegistry;
         this.mode = mode;
@@ -68,10 +73,19 @@ public class SimulatorController {
 
         // Use the first matching strategy
         StrategyConfigEntity s = strategies.get(0);
-        BigDecimal refPrice = s.getBaselinePrice();
 
-        // If no baseline yet, use the current stored market snapshot
-        if (refPrice == null || refPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        // Mirror the evaluator's reference price priority EXACTLY so hints always match reality:
+        //   1) position average buy price (if holding shares)
+        //   2) strategy baseline price (locked at creation or by Reset Baseline)
+        //   3) current market snapshot price
+        PositionEntity position = positionRepository.findBySymbol(sym).orElse(null);
+        BigDecimal refPrice = null;
+        if (position != null && position.getAveragePrice() != null
+                && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0) {
+            refPrice = position.getAveragePrice();
+        } else if (s.getBaselinePrice() != null && s.getBaselinePrice().compareTo(BigDecimal.ZERO) > 0) {
+            refPrice = s.getBaselinePrice();
+        } else {
             var snapshot = marketSnapshotRepository.findTopBySymbolOrderByCapturedAtDesc(sym);
             refPrice = snapshot.map(MarketSnapshotEntity::getPrice).orElse(null);
         }
@@ -181,6 +195,15 @@ public class SimulatorController {
             s.setBaselinePrice(request.price());
             strategyConfigRepository.save(s);
         }
+
+        // Also reset the position's average price to the new baseline.
+        // CRITICAL: the evaluator prioritises position.averagePrice over strategy.baselinePrice.
+        // Without this step, the evaluator ignores the reset while shares are still held,
+        // causing trigger hints to disagree with what actually fires.
+        positionRepository.findBySymbol(symbol).ifPresent(pos -> {
+            pos.setAveragePrice(request.price());
+            positionRepository.save(pos);
+        });
 
         // Unpin so the polling job can resume live prices after baseline reset
         simulatorPriceRegistry.unpin(symbol);

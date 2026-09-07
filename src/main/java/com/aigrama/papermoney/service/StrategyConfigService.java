@@ -144,9 +144,12 @@ public class StrategyConfigService {
     private StrategyConfigDto toDto(StrategyConfigEntity entity) {
         BigDecimal currentPrice = null;
         try {
+            // Read only from the DB cache — do NOT call refreshAndStore here.
+            // The polling job (MarketSnapshotJob) keeps snapshots fresh every 3 s.
+            // Calling refreshAndStore on every list load would trigger a Yahoo fetch
+            // for each strategy, adding ~300 ms latency and polluting the snapshot store.
             MarketSnapshotDto snapshot = marketDataService.latestSnapshot(entity.getSymbol())
-                    .switchIfEmpty(marketDataService.refreshAndStore(entity.getSymbol()))
-                    .block(Duration.ofSeconds(8));
+                    .block(Duration.ofSeconds(4));
             if (snapshot != null) {
                 currentPrice = snapshot.price();
             }

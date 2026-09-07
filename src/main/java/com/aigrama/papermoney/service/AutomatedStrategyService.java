@@ -325,8 +325,12 @@ public class AutomatedStrategyService {
     private long successCountToday(UUID strategyId) {
         LocalDateTime start = LocalDate.now().atStartOfDay();
         LocalDateTime end = start.plusDays(1);
-        return strategyExecutionRepository.countByStrategyConfigIdAndStatusAndExecutedAtBetween(
+        // Count only BUY-side executions — SELL orders must never consume from the daily BUY limit.
+        // Previously this counted all executions (BUY + SELL combined), which incorrectly blocked
+        // subsequent BUYs after a SELL even if the BUY limit had not been reached.
+        return strategyExecutionRepository.countByStrategyConfigIdAndSideAndStatusAndExecutedAtBetween(
                 strategyId,
+                OrderSide.BUY,
                 StrategyExecutionStatus.SUCCESS,
                 start,
                 end
