@@ -13,6 +13,8 @@ import com.aigrama.papermoney.entity.StrategyExecutionStatus;
 import com.aigrama.papermoney.repository.PositionRepository;
 import com.aigrama.papermoney.repository.StrategyConfigRepository;
 import com.aigrama.papermoney.repository.StrategyExecutionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,12 +34,15 @@ import java.util.UUID;
 @Service
 public class AutomatedStrategyService {
 
+    private static final Logger log = LoggerFactory.getLogger(AutomatedStrategyService.class);
+
     private final StrategyConfigRepository strategyConfigRepository;
     private final StrategyExecutionRepository strategyExecutionRepository;
     private final PositionRepository positionRepository;
     private final MarketDataService marketDataService;
     private final TradingService tradingService;
     private final AiDecisionService aiDecisionService;
+    private final SimulatorPriceRegistry simulatorPriceRegistry;
     private final String mode;
     private final long maxStaleSeconds;
     private final boolean aiEnabled;
@@ -48,10 +53,11 @@ public class AutomatedStrategyService {
             PositionRepository positionRepository,
             MarketDataService marketDataService,
             TradingService tradingService,
-                AiDecisionService aiDecisionService,
+            AiDecisionService aiDecisionService,
+            SimulatorPriceRegistry simulatorPriceRegistry,
             @Value("${paperstock.mode:simulator}") String mode,
-                @Value("${paperstock.market-data.max-stale-seconds:120}") long maxStaleSeconds,
-                @Value("${paperstock.ai.enabled:true}") boolean aiEnabled
+            @Value("${paperstock.market-data.max-stale-seconds:120}") long maxStaleSeconds,
+            @Value("${paperstock.ai.enabled:true}") boolean aiEnabled
     ) {
         this.strategyConfigRepository = strategyConfigRepository;
         this.strategyExecutionRepository = strategyExecutionRepository;
@@ -59,6 +65,7 @@ public class AutomatedStrategyService {
         this.marketDataService = marketDataService;
         this.tradingService = tradingService;
         this.aiDecisionService = aiDecisionService;
+        this.simulatorPriceRegistry = simulatorPriceRegistry;
         this.mode = mode;
         this.maxStaleSeconds = maxStaleSeconds;
         this.aiEnabled = aiEnabled;
@@ -78,7 +85,8 @@ public class AutomatedStrategyService {
     @Transactional
     protected void evaluateOne(StrategyConfigEntity strategy) {
         if (!isModeAllowed(strategy)) {
-            record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED, "Strategy disabled for current mode");
+            record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED,
+                    "Strategy broker '" + strategy.getBroker() + "' does not match active mode '" + mode + "'");
             return;
         }
 
@@ -96,29 +104,57 @@ public class AutomatedStrategyService {
         PositionEntity position = positionRepository.findBySymbol(strategy.getSymbol())
                 .orElse(null);
 
-        MarketSnapshotDto latestSnapshot = marketDataService.refreshAndStore(strategy.getSymbol())
+        // Use the stored snapshot so manually injected simulator prices are respected.
+        MarketSnapshotDto latestSnapshot = marketDataService.latestSnapshot(strategy.getSymbol())
+                .switchIfEmpty(marketDataService.refreshAndStore(strategy.getSymbol()))
                 .block(Duration.ofSeconds(8));
 
         BigDecimal currentPrice = latestSnapshot == null ? null : latestSnapshot.price();
+        log.info("[{}] eval: currentPrice={} capturedAt={}", strategy.getSymbol(), currentPrice,
+                latestSnapshot != null ? latestSnapshot.capturedAt() : "null");
+
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("[{}] SKIP — no current market price", strategy.getSymbol());
             record(strategy, OrderSide.BUY, null, null, null, StrategyExecutionStatus.SKIPPED, "No current market price");
             return;
         }
 
-        BigDecimal referencePrice = (position != null && position.getAveragePrice() != null && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0)
-                ? position.getAveragePrice()
-                : currentPrice;
+        // Stable reference: (1) position avg price, (2) baseline at creation, (3) current price
+        BigDecimal referencePrice;
+        if (position != null && position.getAveragePrice() != null && position.getAveragePrice().compareTo(BigDecimal.ZERO) > 0) {
+            referencePrice = position.getAveragePrice();
+        } else if (strategy.getBaselinePrice() != null && strategy.getBaselinePrice().compareTo(BigDecimal.ZERO) > 0) {
+            referencePrice = strategy.getBaselinePrice();
+        } else {
+            referencePrice = currentPrice;
+        }
+        log.info("[{}] eval: referencePrice={} baselinePrice={}", strategy.getSymbol(), referencePrice, strategy.getBaselinePrice());
 
         if (latestSnapshot == null || latestSnapshot.capturedAt() == null) {
+            log.warn("[{}] SKIP — missing quote timestamp", strategy.getSymbol());
             record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Missing quote timestamp");
             return;
         }
 
         long ageSeconds = ChronoUnit.SECONDS.between(latestSnapshot.capturedAt(), LocalDateTime.now());
         if (ageSeconds > maxStaleSeconds) {
-            record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED,
-                "Stale quote skipped: " + ageSeconds + "s old");
-            return;
+            // If this is a pinned simulator price, do NOT refresh from the real market API
+            // because that would overwrite the manually injected test price.
+            if (simulatorPriceRegistry.isPinned(strategy.getSymbol())) {
+                log.info("[{}] quote is stale ({}s) but price is pinned — skipping refresh",
+                        strategy.getSymbol(), ageSeconds);
+                // Continue evaluation with the pinned price as-is
+            } else {
+                log.warn("[{}] quote is stale ({}s old) — refreshing from market API", strategy.getSymbol(), ageSeconds);
+                latestSnapshot = marketDataService.refreshAndStore(strategy.getSymbol()).block(Duration.ofSeconds(8));
+                if (latestSnapshot == null) {
+                    log.warn("[{}] SKIP — refresh failed, no market price available", strategy.getSymbol());
+                    record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Stale quote, refresh failed");
+                    return;
+                }
+                currentPrice = latestSnapshot.price();
+                log.info("[{}] refreshed price: {}", strategy.getSymbol(), currentPrice);
+            }
         }
 
         BigDecimal buyDropPercent = strategy.getBuyDropPercent();
@@ -126,7 +162,13 @@ public class AutomatedStrategyService {
         boolean allowBuy = true;
         boolean allowSell = true;
 
-        if (aiEnabled) {
+        // AI gate: skip in simulator mode — the user is testing strategy thresholds
+        // directly, not AI sentiment. Injecting a lower price creates artificial negative
+        // momentum which would veto a valid buy signal.
+        boolean isSimulator = "simulator".equalsIgnoreCase(strategy.getBroker())
+                || "simulator".equalsIgnoreCase(mode);
+
+        if (aiEnabled && !isSimulator) {
             AiDecisionDto decision = aiDecisionService.evaluate(
                 strategy.getSymbol(),
                 strategy.getBuyDropPercent(),
@@ -137,6 +179,11 @@ public class AutomatedStrategyService {
             sellRisePercent = decision.dynamicSellRisePercent();
             allowBuy = decision.allowBuy();
             allowSell = decision.allowSell();
+            log.info("[{}] AI: allowBuy={} allowSell={} buyProb={} sellProb={}",
+                    strategy.getSymbol(), allowBuy, allowSell,
+                    decision.buyProbability(), decision.sellProbability());
+        } else if (isSimulator) {
+            log.info("[{}] AI gate bypassed (simulator mode)", strategy.getSymbol());
         }
 
         BigDecimal buyTriggerPrice = referencePrice
@@ -145,6 +192,9 @@ public class AutomatedStrategyService {
         BigDecimal sellTriggerPrice = referencePrice
             .multiply(BigDecimal.ONE.add(sellRisePercent.movePointLeft(2)))
                 .setScale(6, RoundingMode.HALF_UP);
+
+        log.info("[{}] eval: buyTrigger={} sellTrigger={} current={}",
+                strategy.getSymbol(), buyTriggerPrice, sellTriggerPrice, currentPrice);
 
         if (!allowBuy && currentPrice.compareTo(buyTriggerPrice) <= 0) {
             record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED,
@@ -172,16 +222,20 @@ public class AutomatedStrategyService {
     }
 
     private void executeBuy(StrategyConfigEntity strategy, BigDecimal currentPrice, BigDecimal referencePrice) {
+        log.info("[{}] executeBuy triggered at price={}", strategy.getSymbol(), currentPrice);
         AccountDto account = tradingService.getAccount().block(Duration.ofSeconds(6));
         if (account == null || account.cash() == null || account.cash().compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("[{}] SKIP executeBuy — no available cash (account={})", strategy.getSymbol(), account);
             record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "No available cash");
             return;
         }
 
         BigDecimal cashToUse = account.cash().multiply(strategy.getBuyCashPercent().movePointLeft(2));
         BigDecimal qty = cashToUse.divide(currentPrice, 6, RoundingMode.DOWN);
+        log.info("[{}] executeBuy: cash={} cashToUse={} qty={}", strategy.getSymbol(), account.cash(), cashToUse, qty);
 
         if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("[{}] SKIP executeBuy — computed qty is zero", strategy.getSymbol());
             record(strategy, OrderSide.BUY, null, currentPrice, referencePrice, StrategyExecutionStatus.SKIPPED, "Computed buy qty is zero");
             return;
         }
@@ -232,13 +286,8 @@ public class AutomatedStrategyService {
     }
 
     private boolean isModeAllowed(StrategyConfigEntity strategy) {
-        if ("simulator".equalsIgnoreCase(mode)) {
-            return strategy.isSimulatorEnabled();
-        }
-        if ("alpaca".equalsIgnoreCase(mode)) {
-            return strategy.isAlpacaEnabled();
-        }
-        return false;
+        String broker = strategy.getBroker() != null ? strategy.getBroker().toLowerCase() : "simulator";
+        return broker.equalsIgnoreCase(mode);
     }
 
     private boolean isCooldownActive(StrategyConfigEntity strategy) {
@@ -278,6 +327,7 @@ public class AutomatedStrategyService {
         execution.setId(UUID.randomUUID());
         execution.setStrategyConfigId(strategy.getId());
         execution.setSymbol(strategy.getSymbol());
+        execution.setBroker(strategy.getBroker() != null ? strategy.getBroker() : "simulator");
         execution.setSide(side);
         execution.setOrderId(orderId);
         execution.setTriggerPrice(triggerPrice);

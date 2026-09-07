@@ -43,11 +43,13 @@ public class StrategyConfigEntity {
     @Column(nullable = false)
     private boolean active;
 
-    @Column(name = "simulator_enabled", nullable = false)
-    private boolean simulatorEnabled;
+    @Column(name = "broker", nullable = false, length = 50)
+    private String broker;
 
-    @Column(name = "alpaca_enabled", nullable = false)
-    private boolean alpacaEnabled;
+    /** Market price captured at strategy creation time. Used as stable reference
+     *  when no holding position exists, so triggers don't float with injected prices. */
+    @Column(name = "baseline_price", precision = 19, scale = 6)
+    private BigDecimal baselinePrice;
 
     @Column(name = "last_action_at")
     private LocalDateTime lastActionAt;
@@ -130,20 +132,20 @@ public class StrategyConfigEntity {
         this.active = active;
     }
 
-    public boolean isSimulatorEnabled() {
-        return simulatorEnabled;
+    public String getBroker() {
+        return broker;
     }
 
-    public void setSimulatorEnabled(boolean simulatorEnabled) {
-        this.simulatorEnabled = simulatorEnabled;
+    public void setBroker(String broker) {
+        this.broker = broker;
     }
 
-    public boolean isAlpacaEnabled() {
-        return alpacaEnabled;
+    public BigDecimal getBaselinePrice() {
+        return baselinePrice;
     }
 
-    public void setAlpacaEnabled(boolean alpacaEnabled) {
-        this.alpacaEnabled = alpacaEnabled;
+    public void setBaselinePrice(BigDecimal baselinePrice) {
+        this.baselinePrice = baselinePrice;
     }
 
     public LocalDateTime getLastActionAt() {

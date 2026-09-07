@@ -1,6 +1,17 @@
 spring:
   application:
     name: paperstock
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+  web:
+    resources:
+      cache:
+        period: 0
+        cachecontrol:
+          no-cache: true
   datasource:
     url: jdbc:h2:mem:paperstock;DB_CLOSE_DELAY=-1
     username: sa
@@ -52,10 +63,10 @@ paperstock:
     twelvedata:
       base-url: ${TWELVEDATA_BASE_URL:https://api.twelvedata.com}
       api-key: ${TWELVEDATA_API_KEY:demo}
-    poll-ms: 60000
+    poll-ms: 3000
   strategy:
     enabled: true
-    eval-ms: 60000
+    eval-ms: 3000
   ai:
     enabled: ${PAPERSTOCK_AI_ENABLED:true}
     sentiment:

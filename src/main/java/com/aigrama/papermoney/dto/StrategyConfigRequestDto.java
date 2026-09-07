@@ -20,7 +20,7 @@ public record StrategyConfigRequestDto(
         @NotNull @Min(1) Integer maxOrdersPerDay,
         @NotNull @Min(0) Integer cooldownMinutes,
         @NotNull Boolean active,
-        @NotNull Boolean simulatorEnabled,
-        @NotNull Boolean alpacaEnabled
+        /** The single broker this strategy should execute on (e.g. "simulator", "alpaca", "robinhood"). */
+        @NotBlank String broker
 ) {
 }

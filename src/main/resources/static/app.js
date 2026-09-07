@@ -95,8 +95,8 @@ function fillForm(strategy) {
     $("maxOrdersPerDay").value = strategy.maxOrdersPerDay;
     $("cooldownMinutes").value = strategy.cooldownMinutes;
     $("active").checked = strategy.active;
-    $("simulatorEnabled").checked = strategy.simulatorEnabled;
-    $("alpacaEnabled").checked = strategy.alpacaEnabled;
+    const brokerSelect = $("strategyBroker");
+    if (brokerSelect) brokerSelect.value = strategy.broker || "simulator";
 }
 
 async function onStrategyTableClick(event) {
@@ -181,8 +181,8 @@ function clearForm() {
     $("strategyId").value = "";
     $("strategyForm").reset();
     $("active").checked = true;
-    $("simulatorEnabled").checked = true;
-    $("alpacaEnabled").checked = true;
+    const brokerSelect = $("strategyBroker");
+    if (brokerSelect) brokerSelect.value = "simulator";
     $("buyDropPercent").value = "5";
     $("sellRisePercent").value = "10";
     $("buyCashPercent").value = "10";
@@ -260,8 +260,7 @@ function strategyPayloadFromForm() {
         maxOrdersPerDay: Number($("maxOrdersPerDay").value),
         cooldownMinutes: Number($("cooldownMinutes").value),
         active: $("active").checked,
-        simulatorEnabled: $("simulatorEnabled").checked,
-        alpacaEnabled: $("alpacaEnabled").checked
+        broker: $("strategyBroker") ? $("strategyBroker").value : "simulator"
     };
 }
 
@@ -330,7 +329,7 @@ function renderStrategies() {
             <td class="mono">${buyTargetText}</td>
             <td class="mono">${sellTargetText}</td>
             <td><span class="tag ${statusClass}">${s.active ? "active" : "paused"}</span></td>
-            <td>${s.simulatorEnabled ? "sim" : ""}${s.alpacaEnabled ? " alpaca" : ""}</td>
+            <td><span class="mode-tag">${escapeHtml(formatBrokerLabel(s.broker || "simulator"))}</span></td>
             <td>
                 <div class="inline-actions">
                     <button type="button" data-id="${s.id}" data-action="edit" class="btn compact">Edit</button>
@@ -561,6 +560,7 @@ function renderStrategyReport() {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td class="mono">${escapeHtml(row.symbol)}</td>
+            <td><span class="mode-tag">${escapeHtml(formatBrokerLabel(row.broker || "simulator"))}</span></td>
             <td>${toNum(row.buyQty)}</td>
             <td>${toMoney(row.buyAmount)}</td>
             <td>${Number(row.buyTrades || 0)}</td>
@@ -608,6 +608,12 @@ async function loadAccount() {
         cashInput.value = account.cash != null ? Number(account.cash) : 100000;
     }
     $("accountEquity").textContent = toMoney(account.equity);
+
+    // Show Simulator Price Override panel only in simulator mode
+    const simWrap = $("simPriceOverrideWrap");
+    if (simWrap) {
+        simWrap.hidden = (account.mode || "simulator") !== "simulator";
+    }
 }
 
 async function updateAccountMode() {
@@ -668,6 +674,9 @@ function formatModeLabel(mode) {
     };
     return map[mode.toLowerCase()] || mode;
 }
+
+/** Alias used for broker badge rendering in strategy table and report. */
+const formatBrokerLabel = formatModeLabel;
 
 async function loadHoldings() {
     const holdings = await api("/api/trade/positions");
@@ -1019,6 +1028,103 @@ bind("toggleAddHoldingBtn", "click", () => {
     if (isHidden) {
         const firstInput = wrap.querySelector("input");
         if (firstInput) firstInput.focus();
+    }
+});
+
+// Simulator price override form
+const simPriceFormEl = $("simPriceForm");
+if (simPriceFormEl) {
+    simPriceFormEl.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const symbol = $("simPriceSymbol").value.trim().toUpperCase();
+        const price  = Number($("simPriceValue").value);
+        if (!symbol || price <= 0) return;
+
+        try {
+            const result = await api("/api/simulator/price", {
+                method: "PUT",
+                body: JSON.stringify({ symbol, price })
+            });
+            showToast(`✅ ${symbol} price set to ${toMoney(result.price)}`, "success");
+
+            // Append to in-panel history log
+            const hist = $("simPriceHistory");
+            if (hist) {
+                const row = document.createElement("div");
+                row.className = "sim-price-entry";
+                const ts = new Date(result.effectiveAt || Date.now()).toLocaleTimeString();
+                row.innerHTML = `
+                    <span class="mono">${escapeHtml(result.symbol)}</span>
+                    <span class="sim-price-val">${toMoney(result.price)}</span>
+                    <span class="sim-price-ts">${ts}</span>
+                    <span class="hint" style="font-size:0.75rem;">— strategy will evaluate on next cycle</span>
+                `;
+                hist.prepend(row);
+            }
+
+            // Reset only price field, keep symbol for quick re-testing
+            $("simPriceValue").value = "";
+        } catch (err) {
+            showError(err);
+        }
+    });
+}
+
+// Load trigger hints when the user types a symbol into the sim price form
+let simSymbolTimer;
+const simSymbolInput = $("simPriceSymbol");
+if (simSymbolInput) {
+    simSymbolInput.addEventListener("input", () => {
+        clearTimeout(simSymbolTimer);
+        const sym = simSymbolInput.value.trim().toUpperCase();
+        if (!sym) {
+            const hints = $("simTriggerHints");
+            if (hints) hints.hidden = true;
+            return;
+        }
+        simSymbolTimer = setTimeout(() => loadSimTriggerHints(sym), 350);
+    });
+}
+
+async function loadSimTriggerHints(symbol) {
+    try {
+        const data = await api(`/api/simulator/triggers?symbol=${encodeURIComponent(symbol)}`);
+        const hints = $("simTriggerHints");
+        if (!hints) return;
+
+        if (!data.buyTrigger && !data.sellTrigger) {
+            hints.hidden = true;
+            return;
+        }
+
+        $("simBuyTrigger").textContent  = data.buyTrigger  ? toMoney(data.buyTrigger)  : "—";
+        $("simSellTrigger").textContent = data.sellTrigger ? toMoney(data.sellTrigger) : "—";
+        $("simRefPrice").textContent    = data.referencePrice ? toMoney(data.referencePrice) : "—";
+        hints.hidden = false;
+    } catch (_) {
+        const hints = $("simTriggerHints");
+        if (hints) hints.hidden = true;
+    }
+}
+
+// Reset Baseline button — re-anchors the reference price to the current stored market price
+bind("resetBaselineBtn", "click", async () => {
+    const sym = $("simPriceSymbol") ? $("simPriceSymbol").value.trim().toUpperCase() : "";
+    if (!sym) { showToast("Enter a symbol first", "warn"); return; }
+
+    // Fetch the real live price and use it as the new baseline
+    try {
+        const latest = await api(`/api/market/latest?symbol=${encodeURIComponent(sym)}&refresh=true`);
+        if (!latest || !latest.price) { showToast("Could not fetch live price", "warn"); return; }
+
+        const result = await api("/api/simulator/baseline", {
+            method: "PUT",
+            body: JSON.stringify({ symbol: sym, price: latest.price })
+        });
+        showToast(`✅ Baseline reset to ${toMoney(result.baselinePrice)} for ${sym}`, "success");
+        loadSimTriggerHints(sym);
+    } catch (err) {
+        showError(err);
     }
 });
 

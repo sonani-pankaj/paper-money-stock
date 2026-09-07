@@ -14,4 +14,6 @@ public interface StrategyConfigRepository extends JpaRepository<StrategyConfigEn
     List<StrategyConfigEntity> findAllByActiveTrue();
 
     Optional<StrategyConfigEntity> findBySymbol(String symbol);
+
+    List<StrategyConfigEntity> findAllBySymbol(String symbol);
 }

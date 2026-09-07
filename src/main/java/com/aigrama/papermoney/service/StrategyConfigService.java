@@ -55,7 +55,19 @@ public class StrategyConfigService {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
 
+        // Capture baseline price at creation time — used as stable reference
+        // when no position is held, so triggers don't float with live price changes
+        try {
+            MarketSnapshotDto snapshot = marketDataService.latestSnapshot(symbol).block();
+            if (snapshot != null && snapshot.price() != null) {
+                entity.setBaselinePrice(snapshot.price());
+            }
+        } catch (Exception ignored) {
+            // Non-fatal: baseline price will be null and fall back to current price
+        }
+
         return toDto(strategyConfigRepository.save(entity));
+
     }
 
     public List<StrategyConfigDto> list() {
@@ -123,8 +135,7 @@ public class StrategyConfigService {
         entity.setMaxOrdersPerDay(request.maxOrdersPerDay());
         entity.setCooldownMinutes(request.cooldownMinutes());
         entity.setActive(Boolean.TRUE.equals(request.active()));
-        entity.setSimulatorEnabled(Boolean.TRUE.equals(request.simulatorEnabled()));
-        entity.setAlpacaEnabled(Boolean.TRUE.equals(request.alpacaEnabled()));
+        entity.setBroker(request.broker() != null ? request.broker().toLowerCase() : "simulator");
     }
 
     private StrategyConfigDto toDto(StrategyConfigEntity entity) {
@@ -161,8 +172,7 @@ public class StrategyConfigService {
                 entity.getMaxOrdersPerDay(),
                 entity.getCooldownMinutes(),
                 entity.isActive(),
-                entity.isSimulatorEnabled(),
-                entity.isAlpacaEnabled(),
+                entity.getBroker() != null ? entity.getBroker() : "simulator",
                 entity.getLastActionAt(),
                 currentPrice,
                 referencePrice,

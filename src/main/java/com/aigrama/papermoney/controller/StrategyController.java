@@ -129,24 +129,33 @@ public class StrategyController {
     @GetMapping("/report")
     public List<StrategyTradeReportDto> report() {
         List<StrategyExecutionEntity> executions = strategyExecutionRepository.findByStatus(StrategyExecutionStatus.SUCCESS);
+
+        // Build a map of executionOrderId -> broker for broker lookup when joining trades
+        Map<String, String> orderIdToBroker = new LinkedHashMap<>();
         ArrayList<UUID> orderIds = new ArrayList<>();
         for (StrategyExecutionEntity execution : executions) {
             if (execution.getOrderId() == null || execution.getOrderId().isBlank()) {
                 continue;
             }
             try {
-                orderIds.add(UUID.fromString(execution.getOrderId()));
+                UUID orderId = UUID.fromString(execution.getOrderId());
+                orderIds.add(orderId);
+                orderIdToBroker.put(execution.getOrderId(),
+                        execution.getBroker() != null ? execution.getBroker() : "simulator");
             } catch (IllegalArgumentException ignored) {
-                // Non-UUID order IDs can occur in non-simulator modes; skip those for trade-based aggregation.
+                // Non-UUID order IDs can occur in non-simulator modes; skip those.
             }
         }
 
         List<TradeEntity> trades = orderIds.isEmpty() ? List.of() : tradeRepository.findAllByOrder_IdIn(orderIds);
-        Map<String, Totals> bySymbol = new LinkedHashMap<>();
+        // Key: "SYMBOL::broker"
+        Map<String, Totals> bySymbolBroker = new LinkedHashMap<>();
 
         for (TradeEntity trade : trades) {
-            String symbol = trade.getSymbol();
-            Totals totals = bySymbol.computeIfAbsent(symbol, key -> new Totals());
+            String broker = orderIdToBroker.getOrDefault(
+                    trade.getOrder().getId().toString(), "simulator");
+            String key = trade.getSymbol() + "::" + broker;
+            Totals totals = bySymbolBroker.computeIfAbsent(key, k -> new Totals(trade.getSymbol(), broker));
             BigDecimal amount = trade.getQty().multiply(trade.getPrice());
 
             if (trade.getOrder() != null && trade.getOrder().getSide() == OrderSide.SELL) {
@@ -160,15 +169,16 @@ public class StrategyController {
             }
         }
 
-        return bySymbol.entrySet().stream()
-                .map(entry -> new StrategyTradeReportDto(
-                        entry.getKey(),
-                        entry.getValue().buyQty,
-                        entry.getValue().buyAmount,
-                        entry.getValue().buyTrades,
-                        entry.getValue().sellQty,
-                        entry.getValue().sellAmount,
-                        entry.getValue().sellTrades
+        return bySymbolBroker.values().stream()
+                .map(t -> new StrategyTradeReportDto(
+                        t.symbol,
+                        t.broker,
+                        t.buyQty,
+                        t.buyAmount,
+                        t.buyTrades,
+                        t.sellQty,
+                        t.sellAmount,
+                        t.sellTrades
                 ))
                 .toList();
     }
@@ -243,11 +253,18 @@ public class StrategyController {
     }
 
     private static class Totals {
+        private final String symbol;
+        private final String broker;
         private BigDecimal buyQty = BigDecimal.ZERO;
         private BigDecimal buyAmount = BigDecimal.ZERO;
         private long buyTrades = 0;
         private BigDecimal sellQty = BigDecimal.ZERO;
         private BigDecimal sellAmount = BigDecimal.ZERO;
         private long sellTrades = 0;
+
+        Totals(String symbol, String broker) {
+            this.symbol = symbol;
+            this.broker = broker;
+        }
     }
 }

@@ -58,8 +58,9 @@ public class SimulatorAdapter implements TradingAdapter {
 
     @Override
     public Mono<OrderDto> placeOrder(PlaceOrderRequestDto req) {
-        return marketDataService.refreshAndStore(req.symbol())
-                .then(Mono.fromCallable(() -> placeOrderTx(req)))
+        // Do NOT call refreshAndStore here — in simulator mode the caller may have
+        // injected a specific price via SimulatorController; refreshing would overwrite it.
+        return Mono.fromCallable(() -> placeOrderTx(req))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 

@@ -98,13 +98,87 @@
                     <th>Buy Target (Drop%)</th>
                     <th>Sell Target (Rise%)</th>
                     <th>Status</th>
-                    <th>Modes</th>
+                    <th>Broker</th>
                     <th>Action</th>
                 </tr>
                 </thead>
                 <tbody id="strategyTableBody"></tbody>
             </table>
         </div>
+
+        <!-- Strategy Buy/Sell Report — sub-toggle inside Strategies -->
+        <div class="sub-toggle-wrap" style="margin-top: 12px;">
+            <button type="button" class="sub-toggle" id="reportToggle" aria-expanded="false" aria-controls="reportBody">
+                <span>📊 Buy/Sell Report</span>
+                <span class="sub-toggle-chevron">▶</span>
+            </button>
+            <div id="reportBody" hidden>
+                <div class="report-inset">
+                    <p class="hint" style="margin: 0 0 10px;">Totals from successful strategy executions, grouped by stock symbol.</p>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Broker</th>
+                                <th>Buy Qty</th>
+                                <th>Buy Amount</th>
+                                <th>Buy Trades</th>
+                                <th>Sell Qty</th>
+                                <th>Sell Amount</th>
+                                <th>Sell Trades</th>
+                            </tr>
+                            </thead>
+                            <tbody id="strategyReportBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════
+         SIMULATOR PRICE OVERRIDE (only visible in Simulator mode)
+    ══════════════════════════════════════════════ -->
+    <section class="panel" id="simPriceOverrideWrap" hidden>
+        <div class="panel-header">
+            <div class="panel-header-left">
+                <h2>🧪 Simulator Price Override</h2>
+                <span class="badge" style="background:rgba(42,166,255,0.15);color:var(--accent);">Simulator only</span>
+            </div>
+        </div>
+        <p class="hint" style="margin: 0 0 14px;">
+            Inject a custom market price to instantly trigger your strategy's buy or sell logic on the next evaluation cycle.
+        </p>
+
+        <!-- Live trigger hints — loaded when user types a symbol -->
+        <div id="simTriggerHints" class="sim-trigger-hints" hidden>
+            <div class="sim-trigger-row">
+                <span class="sim-trigger-label">📉 Set price ≤</span>
+                <span class="sim-trigger-val buy" id="simBuyTrigger">—</span>
+                <span class="sim-trigger-label">to trigger <strong>BUY</strong></span>
+            </div>
+            <div class="sim-trigger-row">
+                <span class="sim-trigger-label">📈 Set price ≥</span>
+                <span class="sim-trigger-val sell" id="simSellTrigger">—</span>
+                <span class="sim-trigger-label">to trigger <strong>SELL</strong></span>
+            </div>
+            <div class="sim-trigger-row" style="margin-top:4px;">
+                <span class="hint" style="font-size:0.78rem;">Ref price: <span id="simRefPrice">—</span></span>
+                <button type="button" id="resetBaselineBtn" class="btn compact" style="margin-left:auto; font-size:0.75rem;">↺ Reset Baseline</button>
+            </div>
+        </div>
+
+        <form id="simPriceForm" class="holding-form" style="gap:12px; align-items:flex-end; margin-top:12px;">
+            <label>Symbol
+                <input id="simPriceSymbol" placeholder="AAPL" maxlength="12" required />
+            </label>
+            <label>Override Price ($)
+                <input id="simPriceValue" type="number" min="0.000001" step="0.01" placeholder="e.g. 150.00" required />
+            </label>
+            <button type="submit" class="btn primary">⚡ Set Price</button>
+        </form>
+        <div id="simPriceHistory" class="sim-price-history"></div>
     </section>
 
     <!-- ══════════════════════════════════════════════
@@ -180,39 +254,6 @@
                     </table>
                 </div>
             </section>
-
-            <!-- Strategy Report (collapsed sub-section inside portfolio) -->
-            <div class="sub-toggle-wrap">
-                <button type="button" class="sub-toggle" id="reportToggle" aria-expanded="false" aria-controls="reportBody">
-                    <span>📊 Strategy Buy/Sell Report</span>
-                    <span class="sub-toggle-chevron">▶</span>
-                </button>
-                <div id="reportBody" hidden>
-                    <section class="panel panel-inset">
-                        <div class="panel-header">
-                            <h2>Strategy Buy/Sell Report</h2>
-                            <button type="button" class="help-btn" data-help="report" title="Card Info">?</button>
-                        </div>
-                        <p class="hint">Totals from successful strategy executions, grouped by stock symbol.</p>
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th>Buy Qty</th>
-                                    <th>Buy Amount</th>
-                                    <th>Buy Trades</th>
-                                    <th>Sell Qty</th>
-                                    <th>Sell Amount</th>
-                                    <th>Sell Trades</th>
-                                </tr>
-                                </thead>
-                                <tbody id="strategyReportBody"></tbody>
-                            </table>
-                        </div>
-                    </section>
-                </div>
-            </div>
 
         </div>
     </div>
@@ -422,8 +463,18 @@
             </label>
 
             <label class="check-wrap"><input id="active" type="checkbox" checked /> Active</label>
-            <label class="check-wrap"><input id="simulatorEnabled" type="checkbox" checked /> Simulator</label>
-            <label class="check-wrap"><input id="alpacaEnabled" type="checkbox" checked /> Alpaca</label>
+
+            <label style="grid-column: span 2;">Broker (executes trades on)
+                <select id="strategyBroker" class="account-select" style="margin-top:4px;">
+                    <option value="simulator">🧪 Simulator (Paper)</option>
+                    <option value="alpaca">🦙 Alpaca Brokerage</option>
+                    <option value="interactive_brokers">📊 Interactive Brokers</option>
+                    <option value="td_ameritrade">💼 TD Ameritrade / Schwab</option>
+                    <option value="webull">📱 Webull</option>
+                    <option value="e_trade">💹 E*TRADE</option>
+                    <option value="robinhood">🐦 Robinhood</option>
+                </select>
+            </label>
 
             <div class="form-actions">
                 <button type="submit" class="btn primary">Save Strategy</button>

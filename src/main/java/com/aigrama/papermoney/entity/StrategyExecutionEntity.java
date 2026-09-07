@@ -27,6 +27,10 @@ public class StrategyExecutionEntity {
     @Column(nullable = false)
     private String symbol;
 
+    /** The broker that executed (or attempted) this trade. */
+    @Column(length = 50)
+    private String broker;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderSide side;
@@ -72,6 +76,14 @@ public class StrategyExecutionEntity {
 
     public void setSymbol(String symbol) {
         this.symbol = symbol;
+    }
+
+    public String getBroker() {
+        return broker;
+    }
+
+    public void setBroker(String broker) {
+        this.broker = broker;
     }
 
     public OrderSide getSide() {

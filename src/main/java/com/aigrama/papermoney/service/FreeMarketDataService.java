@@ -86,7 +86,10 @@ public class FreeMarketDataService implements MarketDataService {
                     entity.setId(UUID.randomUUID());
                     entity.setSymbol(symbol.toUpperCase());
                     entity.setPrice(quote.price());
-                    entity.setCapturedAt(quote.timestamp());
+                    // Always stamp fetch time, not the market-close timestamp from the API
+                    // (Yahoo often returns timestamps days old on weekends/holidays, which
+                    // would trigger the stale-quote guard and skip valid prices).
+                    entity.setCapturedAt(LocalDateTime.now());
                     MarketSnapshotEntity saved = marketSnapshotRepository.save(entity);
                     return new MarketSnapshotDto(saved.getSymbol(), saved.getPrice(), saved.getCapturedAt());
                 });

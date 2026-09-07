@@ -5,6 +5,7 @@ import com.aigrama.papermoney.entity.StrategyConfigEntity;
 import com.aigrama.papermoney.repository.PositionRepository;
 import com.aigrama.papermoney.repository.StrategyConfigRepository;
 import com.aigrama.papermoney.service.MarketDataService;
+import com.aigrama.papermoney.service.SimulatorPriceRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,17 +24,20 @@ public class MarketSnapshotJob {
     private final MarketDataService marketDataService;
     private final StrategyConfigRepository strategyConfigRepository;
     private final PositionRepository positionRepository;
+    private final SimulatorPriceRegistry simulatorPriceRegistry;
     private final List<String> defaultSymbols;
 
     public MarketSnapshotJob(
             MarketDataService marketDataService,
             StrategyConfigRepository strategyConfigRepository,
             PositionRepository positionRepository,
+            SimulatorPriceRegistry simulatorPriceRegistry,
             @Value("${paperstock.symbols:}") String symbols
     ) {
         this.marketDataService = marketDataService;
         this.strategyConfigRepository = strategyConfigRepository;
         this.positionRepository = positionRepository;
+        this.simulatorPriceRegistry = simulatorPriceRegistry;
         this.defaultSymbols = Arrays.stream(symbols.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
@@ -61,6 +65,13 @@ public class MarketSnapshotJob {
             targetSymbols.addAll(defaultSymbols);
         }
 
-        targetSymbols.forEach(symbol -> marketDataService.refreshAndStore(symbol).subscribe());
+        targetSymbols.forEach(symbol -> {
+            // Skip symbols that have a manually pinned simulator price —
+            // the real market API should not overwrite injected test prices.
+            if (simulatorPriceRegistry.isPinned(symbol)) {
+                return;
+            }
+            marketDataService.refreshAndStore(symbol).subscribe();
+        });
     }
 }

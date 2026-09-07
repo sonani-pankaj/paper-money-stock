@@ -16,8 +16,8 @@ public record StrategyConfigDto(
         Integer maxOrdersPerDay,
         Integer cooldownMinutes,
         boolean active,
-        boolean simulatorEnabled,
-        boolean alpacaEnabled,
+        /** The single broker this strategy executes on. */
+        String broker,
         LocalDateTime lastActionAt,
         BigDecimal currentPrice,
         BigDecimal referencePrice,
